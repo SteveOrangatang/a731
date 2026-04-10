@@ -166,6 +166,14 @@ export default function App() {
   const [isTyping, setIsTyping]           = useState(false);
   const messagesEndRef = useRef(null);
 
+  // Site access gate
+  const [siteAccessGranted, setSiteAccessGranted] = useState(() => sessionStorage.getItem('a731_access') === 'true');
+  const [siteCodeInput, setSiteCodeInput]   = useState('');
+  const [siteCodeError, setSiteCodeError]   = useState('');
+  const [siteAccessCodes, setSiteAccessCodes] = useState([]);
+  const [newSiteCode, setNewSiteCode]       = useState('');
+  const [siteCodeStatus, setSiteCodeStatus] = useState('');
+
   // Admin state
   const [adminPasscode, setAdminPasscode]   = useState('');
   const [storedPasscodes, setStoredPasscodes] = useState([]);
@@ -212,7 +220,15 @@ export default function App() {
       if (snap.exists()) {
         setStoredPasscodes(snap.data().passcodes || []);
       } else {
-        setDoc(ref('settings', 'admin'), { passcodes: ['admin123'] });
+        setDoc(ref('settings', 'admin'), { passcodes: [] });
+      }
+    });
+
+    const unsubSiteAccess = onSnapshot(ref('settings', 'siteAccess'), (snap) => {
+      if (snap.exists()) {
+        setSiteAccessCodes(snap.data().codes || []);
+      } else {
+        setDoc(ref('settings', 'siteAccess'), { codes: [] });
       }
     });
 
@@ -221,7 +237,7 @@ export default function App() {
       setAllTranscripts(data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
     });
 
-    return () => { unsubAgents(); unsubConfig(); unsubTranscripts(); };
+    return () => { unsubAgents(); unsubConfig(); unsubSiteAccess(); unsubTranscripts(); };
   }, [user]);
 
   // Auto-scroll
@@ -391,6 +407,38 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role === 'user' ? `${d.student
   };
 
   // ---------------------------------------------------------------------------
+  // Site Access Gate
+  // ---------------------------------------------------------------------------
+  const handleSiteAccess = (e) => {
+    e.preventDefault();
+    const code = siteCodeInput.trim();
+    if (code === SUPER_ADMIN_PASSCODE || siteAccessCodes.includes(code)) {
+      sessionStorage.setItem('a731_access', 'true');
+      setSiteAccessGranted(true);
+      setSiteCodeError('');
+    } else {
+      setSiteCodeError('Invalid access code. Contact your instructor.');
+      setSiteCodeInput('');
+    }
+  };
+
+  const handleAddSiteCode = async (e) => {
+    e.preventDefault();
+    const p = newSiteCode.trim();
+    if (!p || p === SUPER_ADMIN_PASSCODE || siteAccessCodes.includes(p)) return;
+    try {
+      await updateDoc(ref('settings', 'siteAccess'), { codes: arrayUnion(p) });
+      setSiteCodeStatus('Code added.'); setNewSiteCode('');
+      setTimeout(() => setSiteCodeStatus(''), 2500);
+    } catch (err) { console.error(err); }
+  };
+
+  const handleRemoveSiteCode = async (p) => {
+    try { await updateDoc(ref('settings', 'siteAccess'), { codes: arrayRemove(p) }); }
+    catch (err) { console.error(err); }
+  };
+
+  // ---------------------------------------------------------------------------
   // Admin
   // ---------------------------------------------------------------------------
   const handleAdminLogin = (e) => {
@@ -469,6 +517,59 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role === 'user' ? `${d.student
         )}
       </div>
     </header>
+  );
+
+  // ---------------------------------------------------------------------------
+  // SPLASH — blocks all access until a valid code is entered
+  // ---------------------------------------------------------------------------
+  if (!siteAccessGranted) return (
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 font-sans">
+      <div className="max-w-sm w-full text-center">
+        {/* Branding */}
+        <div className="mb-10">
+          <div className="flex items-center justify-center mb-4">
+            <Shield className="h-14 w-14 text-amber-500" />
+          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight leading-tight">
+            A731 Leadership Simulator
+          </h1>
+          <p className="text-slate-400 mt-2 text-sm">Leading Up: Morally Courageous Followership</p>
+        </div>
+
+        {/* Code card */}
+        <div className="bg-slate-800 rounded-2xl p-8 shadow-2xl border border-slate-700">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Lock className="h-5 w-5 text-amber-500" />
+            <h2 className="text-base font-bold text-white uppercase tracking-widest">Access Required</h2>
+          </div>
+          <p className="text-slate-400 text-xs mb-6">Enter the access code provided by your instructor.</p>
+
+          <form onSubmit={handleSiteAccess} className="space-y-4">
+            <input
+              type="password"
+              required
+              autoFocus
+              placeholder="••••••••"
+              value={siteCodeInput}
+              onChange={e => setSiteCodeInput(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-amber-500 text-center tracking-[0.35em] text-lg font-mono"
+            />
+            {siteCodeError && (
+              <p className="flex items-center justify-center gap-1.5 text-red-400 text-xs font-medium">
+                <ShieldAlert className="h-3.5 w-3.5" />{siteCodeError}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="w-full bg-amber-500 text-slate-900 py-3 rounded-lg font-bold hover:bg-amber-400 active:scale-[0.98] transition-all text-sm uppercase tracking-widest">
+              Enter
+            </button>
+          </form>
+        </div>
+
+        <p className="text-slate-700 text-xs mt-8">CGSC Fort Leavenworth · A731</p>
+      </div>
+    </div>
   );
 
   // ---------------------------------------------------------------------------
@@ -852,46 +953,101 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role === 'user' ? `${d.student
           {/* ---- SECURITY ---- */}
           {adminTab === 'settings' && (
             <div className="p-8">
-              <div className="max-w-2xl">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center">
-                  <Lock className="h-5 w-5 mr-2" />Access Management
-                </h3>
-                <div className="mb-8 p-4 bg-slate-50 rounded-lg border flex items-center shadow-sm">
-                  <Shield className="h-5 w-5 text-amber-600 mr-3 flex-shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-900">Master Key configured via environment variable</div>
-                    <div className="text-xs text-slate-500">Set VITE_SUPER_ADMIN_PASSCODE in .env.local or Vercel settings</div>
+              <div className="max-w-2xl space-y-10">
+
+                {/* ── SECTION 1: Site Access Codes ── */}
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
+                    <Lock className="h-5 w-5 mr-2 text-amber-500" />Site Access Codes
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-6">
+                    These codes unlock the splash screen entry gate. Share one with each student or cohort.
+                    The master key (CPTAMERICA) always works and does not appear here.
+                  </p>
+
+                  <form onSubmit={handleAddSiteCode} className="mb-6 flex gap-2">
+                    <div className="flex-grow relative">
+                      <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                      <input type="text" value={newSiteCode} onChange={e => setNewSiteCode(e.target.value)}
+                        placeholder="New access code..."
+                        className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-amber-400 uppercase" />
+                    </div>
+                    <button type="submit" className="bg-amber-500 text-slate-900 px-6 py-2 rounded-md font-bold hover:bg-amber-400 flex items-center whitespace-nowrap">
+                      <Plus className="h-4 w-4 mr-1" />Add Code
+                    </button>
+                  </form>
+
+                  <div className="border rounded-lg overflow-hidden shadow-sm">
+                    <div className="bg-slate-50 px-4 py-3 border-b text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Shield className="h-3 w-3" />Active Site Access Codes
+                    </div>
+                    <div className="divide-y">
+                      {siteAccessCodes.length === 0
+                        ? <div className="p-8 text-center text-sm text-slate-400 italic">No codes added yet. Only the master key can access.</div>
+                        : siteAccessCodes.map(p => (
+                          <div key={p} className="px-4 py-3 flex justify-between items-center group hover:bg-slate-50">
+                            <code className="text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded font-mono">{p}</code>
+                            <button onClick={() => handleRemoveSiteCode(p)}
+                              className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all" title="Revoke code">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))
+                      }
+                    </div>
                   </div>
+                  {siteCodeStatus && <p className="mt-3 text-sm text-emerald-700 font-bold">{siteCodeStatus}</p>}
                 </div>
-                <form onSubmit={handleAddPasscode} className="mb-8 flex gap-2">
-                  <div className="flex-grow relative">
-                    <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <input type="text" value={newPasscode} onChange={e => setNewPasscode(e.target.value)}
-                      placeholder="New instructor passcode..."
-                      className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-emerald-500" />
+
+                {/* ── SECTION 2: Admin Passcodes ── */}
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
+                    <ShieldAlert className="h-5 w-5 mr-2 text-slate-500" />Admin Passcodes
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-6">
+                    These codes grant access to this Instructor Dashboard (not the student sim).
+                  </p>
+
+                  <div className="mb-6 p-4 bg-slate-50 rounded-lg border flex items-center shadow-sm">
+                    <Shield className="h-5 w-5 text-amber-600 mr-3 flex-shrink-0" />
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm">Master admin key active</div>
+                      <div className="text-xs text-slate-500">Set via VITE_SUPER_ADMIN_PASSCODE env variable</div>
+                    </div>
                   </div>
-                  <button type="submit" className="bg-slate-800 text-white px-6 py-2 rounded-md font-bold hover:bg-slate-900 flex items-center whitespace-nowrap">
-                    <Plus className="h-4 w-4 mr-1" />Add Key
-                  </button>
-                </form>
-                <div className="border rounded-lg overflow-hidden shadow-sm">
-                  <div className="bg-slate-50 px-4 py-3 border-b text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Access Keys</div>
-                  <div className="divide-y">
-                    {storedPasscodes.length === 0
-                      ? <div className="p-8 text-center text-sm text-slate-400 italic">No additional keys configured.</div>
-                      : storedPasscodes.map(p => (
-                        <div key={p} className="p-4 flex justify-between items-center group hover:bg-slate-50">
-                          <code className="text-sm font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">{p}</code>
-                          <button onClick={() => handleRemovePasscode(p)}
-                            className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))
-                    }
+
+                  <form onSubmit={handleAddPasscode} className="mb-6 flex gap-2">
+                    <div className="flex-grow relative">
+                      <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                      <input type="text" value={newPasscode} onChange={e => setNewPasscode(e.target.value)}
+                        placeholder="New admin passcode..."
+                        className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-slate-500" />
+                    </div>
+                    <button type="submit" className="bg-slate-800 text-white px-6 py-2 rounded-md font-bold hover:bg-slate-900 flex items-center whitespace-nowrap">
+                      <Plus className="h-4 w-4 mr-1" />Add Key
+                    </button>
+                  </form>
+
+                  <div className="border rounded-lg overflow-hidden shadow-sm">
+                    <div className="bg-slate-50 px-4 py-3 border-b text-[10px] font-bold text-slate-500 uppercase tracking-widest">Additional Admin Keys</div>
+                    <div className="divide-y">
+                      {storedPasscodes.length === 0
+                        ? <div className="p-8 text-center text-sm text-slate-400 italic">No additional admin keys configured.</div>
+                        : storedPasscodes.map(p => (
+                          <div key={p} className="px-4 py-3 flex justify-between items-center group hover:bg-slate-50">
+                            <code className="text-sm font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">{p}</code>
+                            <button onClick={() => handleRemovePasscode(p)}
+                              className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))
+                      }
+                    </div>
                   </div>
+                  {passcodeStatus && <p className="mt-3 text-sm text-emerald-700 font-bold">{passcodeStatus}</p>}
                 </div>
-                {passcodeStatus && <p className="mt-4 text-sm text-emerald-700 font-bold">{passcodeStatus}</p>}
+
               </div>
             </div>
           )}
