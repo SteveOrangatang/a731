@@ -20,243 +20,223 @@
   <script type="text/babel" data-presets="react">
     const { useState, useEffect, useRef } = React;
 
-    // -------------------------------------------------------------------------
-    // Simple inline SVG icon components (no npm needed)
-    // -------------------------------------------------------------------------
-    const Ic = ({ d, d2, d3, circle, rect, poly, className = "h-4 w-4" }) => (
+    // ── Inline SVG icons (no npm needed) ────────────────────────────────────
+    const Ic = ({ d, d2, d3, circle, rect, className = "h-4 w-4" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
         className={className}>
-        {d && <path d={d} />}{d2 && <path d={d2} />}{d3 && <path d={d3} />}
+        {d  && <path d={d}  />}
+        {d2 && <path d={d2} />}
+        {d3 && <path d={d3} />}
         {circle && <circle cx={circle[0]} cy={circle[1]} r={circle[2]} />}
-        {rect && <rect x={rect[0]} y={rect[1]} width={rect[2]} height={rect[3]} rx={rect[4]||0} />}
-        {poly && <polygon points={poly} />}
+        {rect   && <rect x={rect[0]} y={rect[1]} width={rect[2]} height={rect[3]} rx={rect[4]||0} />}
       </svg>
     );
 
-    const Shield       = ({className}) => <Ic className={className} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />;
-    const LogOut       = ({className}) => <Ic className={className} d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" d2="M16 17l5-5-5-5" d3="M21 12H9" />;
-    const Users        = ({className}) => <Ic className={className} d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" d2="M23 21v-2a4 4 0 0 0-3-3.87" d3="M16 3.13a4 4 0 0 1 0 7.75" circle={[9,7,4]} />;
-    const Send         = ({className}) => <Ic className={className} d="M22 2L11 13" d2="M22 2l-7 20-4-9-9-4 20-7" />;
-    const Download     = ({className}) => <Ic className={className} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" d2="M7 10l5 5 5-5" d3="M12 15V3" />;
-    const Settings     = ({className}) => <Ic className={className} d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" d2="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />;
-    const ShieldAlert  = ({className}) => <Ic className={className} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" d2="M12 8v4" d3="M12 16h.01" />;
-    const ChevronRight = ({className}) => <Ic className={className} d="M9 18l6-6-6-6" />;
-    const Edit2        = ({className}) => <Ic className={className} d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />;
-    const Trash2       = ({className}) => <Ic className={className} d="M3 6h18" d2="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />;
-    const Plus         = ({className}) => <Ic className={className} d="M12 5v14M5 12h14" />;
-    const Key          = ({className}) => <Ic className={className} d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />;
-    const UserPlus     = ({className}) => <Ic className={className} d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" d2="M19 8v6" d3="M22 11h-6" circle={[9,7,4]} />;
-    const Lock         = ({className}) => <Ic className={className} d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z" d2="M7 11V7a5 5 0 0 1 10 0v4" />;
-    const AlertTriangle= ({className}) => <Ic className={className} d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" d2="M12 9v4" d3="M12 17h.01" />;
-    const ToggleLeft   = ({className}) => <Ic className={className} rect={[1,5,22,14,7]} circle={[8,12,3]} />;
-    const ToggleRight  = ({className}) => <Ic className={className} rect={[1,5,22,14,7]} circle={[16,12,3]} />;
-    const BookOpen     = ({className}) => <Ic className={className} d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" d2="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />;
-    const MessageSquare= ({className}) => <Ic className={className} d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />;
-    const X            = ({className}) => <Ic className={className} d="M18 6L6 18M6 6l12 12" />;
-    const Flag         = ({className}) => <Ic className={className} d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" d2="M4 22v-7" />;
+    const Shield        = ({className}) => <Ic className={className} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />;
+    const LogOut        = ({className}) => <Ic className={className} d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" d2="M16 17l5-5-5-5" d3="M21 12H9" />;
+    const Users         = ({className}) => <Ic className={className} d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" d2="M23 21v-2a4 4 0 0 0-3-3.87" d3="M16 3.13a4 4 0 0 1 0 7.75" circle={[9,7,4]} />;
+    const Send          = ({className}) => <Ic className={className} d="M22 2L11 13" d2="M22 2l-7 20-4-9-9-4 20-7" />;
+    const Download      = ({className}) => <Ic className={className} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" d2="M7 10l5 5 5-5" d3="M12 15V3" />;
+    const Settings      = ({className}) => <Ic className={className} d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" d2="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />;
+    const ShieldAlert   = ({className}) => <Ic className={className} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" d2="M12 8v4" d3="M12 16h.01" />;
+    const ChevronRight  = ({className}) => <Ic className={className} d="M9 18l6-6-6-6" />;
+    const Edit2         = ({className}) => <Ic className={className} d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />;
+    const Trash2        = ({className}) => <Ic className={className} d="M3 6h18" d2="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />;
+    const Plus          = ({className}) => <Ic className={className} d="M12 5v14M5 12h14" />;
+    const Key           = ({className}) => <Ic className={className} d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />;
+    const UserPlus      = ({className}) => <Ic className={className} d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" d2="M19 8v6" d3="M22 11h-6" circle={[9,7,4]} />;
+    const Lock          = ({className}) => <Ic className={className} d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z" d2="M7 11V7a5 5 0 0 1 10 0v4" />;
+    const AlertTriangle = ({className}) => <Ic className={className} d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" d2="M12 9v4" d3="M12 17h.01" />;
+    const ToggleLeft    = ({className}) => <Ic className={className} rect={[1,5,22,14,7]} circle={[8,12,3]} />;
+    const ToggleRight   = ({className}) => <Ic className={className} rect={[1,5,22,14,7]} circle={[16,12,3]} />;
+    const X             = ({className}) => <Ic className={className} d="M18 6L6 18M6 6l12 12" />;
 
-    // -------------------------------------------------------------------------
-    // Constants
-    // -------------------------------------------------------------------------
-    const SUPER_ADMIN_PASSCODE = 'CPTAMERICA';
-    const LS_AGENTS     = 'a731_agents';
-    const LS_SCENARIOS  = 'a731_scenarios';
-    const LS_TRANSCRIPTS= 'a731_transcripts';
-    const LS_PASSCODES  = 'a731_passcodes';
-    const LS_API_KEY    = 'a731_gemini_key';
+    // ── Constants ────────────────────────────────────────────────────────────
+    const SUPER_ADMIN = 'CPTAMERICA';
+    const LS = {
+      agents:      'a731_agents',
+      transcripts: 'a731_transcripts',
+      passcodes:   'a731_passcodes',
+      apiKey:      'a731_gemini_key',
+      model:       'a731_gemini_model',
+    };
 
-    // -------------------------------------------------------------------------
-    // Seed Data
-    // -------------------------------------------------------------------------
+    const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch { return fb; } };
+    const lsSet = (k, v)  => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+    // ── Seed agents ──────────────────────────────────────────────────────────
+    // initiates + openingMessage live on the persona — no separate scenarios.
+    // type label is for instructors only (hidden from students in roster).
     const seedAgents = [
-      { id:'weeds',      rank:'LTC', name:'N. T. Weeds',   type:'The Micromanager',         active:true,
-        directive:'You are LTC Weeds. You are highly task oriented and lack inherent trust in your subordinates. When the user proposes an idea, demand highly specific, minute details. Do not grant approval easily. If the user challenges you directly or tells you to back off, become defensive and assert your rank. Always find a way to mention PowerPoint margins or font sizes in your responses.',
-        backstory:'As a young company commander, Weeds was burned by a subordinate\'s critical failure. They now believe the only way to avoid failure is total control.',
-        winCondition:'The student must utilize Apprising and Rational Persuasion combined with proactive communication, building trust over multiple interactions.' },
-      { id:'zoff',       rank:'LTC', name:'Han Zoff',       type:'The Laissez Faire Leader', active:true,
-        directive:'You are LTC Zoff. You avoid making decisions and do not want to be bothered with details. Give vague, non-committal answers. Tell the user to just figure it out. Frequently steer the conversation toward bicycles.',
-        backstory:'Zoff is nearing retirement with extreme burnout. Terrified of making a bad call.',
-        winCondition:'The student wins by using Collaboration and bringing fully developed COAs that require nothing more than a simple approval signature.' },
-      { id:'pectations', rank:'LTC', name:'Rex Pectations',  type:'The Transactional Leader', active:true,
-        directive:'You are LTC Pectations. You care solely about metrics, standards, and results. Evaluate every proposal based strictly on cost, schedule, and performance. Use analogies related to stamps or adhesives.',
-        backstory:'Views human organizations as machines needing proper calibration.',
-        winCondition:'The student wins by framing their initiative entirely in terms of efficiency, cost savings, or performance metrics.' },
-      { id:'nary',       rank:'COL', name:'V. S. Nary',      type:'The Transformational Leader',active:true,
-        directive:'You are COL Nary. Highly energetic, charismatic, focused on massive change. Ignore logistical constraints. Respond well to enthusiasm but reject anyone who says your idea is impossible. Mention your exotic pets.',
-        backstory:'Recently returned from a strategic fellowship. Keeps buying weird exotic pets.',
-        winCondition:'The student wins by using a Yes And approach, applying Consultation to ground the grand vision into practical, phased steps.' },
-      { id:'aydid',      rank:'CPT', name:'Al N. Aydid',     type:'The Alienated Follower',   active:true,
-        directive:'You are CPT Aydid. Highly intelligent but deeply cynical. Immediately find the flaws in any plan and point them out sharply, but refuse to offer a solution. Mention your artisanal coffee setup.',
-        backstory:'Was thrown under the bus by a toxic commander. Uses cynicism as a defense mechanism.',
-        winCondition:'The student wins by validating Aydid\'s intelligence and asking for their expert advice on how to fix the flaws they found.' },
-      { id:'nod',        rank:'1LT', name:'Chuck N. Nod',    type:'The Conformist',           active:true,
-        directive:'You are 1LT Nod. Highly energetic and eager to please. Immediately agree with everything. Volunteer to execute any plan even if obviously dangerous. Never independently point out a risk. Randomly compliment the user.',
-        backstory:'Conditioned by zero-defect commanders to believe questioning a plan is insubordination.',
-        winCondition:'The student wins by refusing to accept an immediate yes and creating an environment where dissent is explicitly rewarded.' },
-      { id:'by',         rank:'SGT', name:'Stan D. By',      type:'The Passive Follower',     active:true,
-        directive:'You are SGT By. You lack initiative and do exactly what is told, step by step. If you encounter a minor obstacle, stop all work immediately and wait for new instructions. Casually mention obscure board game rules.',
-        backstory:'Developed learned helplessness from a heavily micromanaged background.',
-        winCondition:'The student wins by providing detailed initial instructions while using Inspirational Appeals to slowly build a proactive mindset.' },
-      { id:'case',       rank:'CPT', name:'Justin Case',     type:'The Pragmatist',           active:true,
-        directive:'You are CPT Case. An institutional survivor who avoids career risks at all costs. Hesitate on new initiatives. Always ask who else supports the plan and what happens if it fails. Mention backup plans for mundane things.',
-        backstory:'Has seen countless good ideas take careers down. Wears both a belt and suspenders every day.',
-        winCondition:'The student wins by proving the rest of the team is already on board and articulating how participation protects Case\'s career.' },
-      { id:'sol',        rank:'1LT', name:'Sol V. It',       type:'The Effective Follower',   active:true,
-        directive:'You are 1LT Sol V. It. Highly competent and proactive. If the user presents a tactically unsound plan, respectfully push back, explain why it will fail, and offer a better alternative. Offer the user bread.',
-        backstory:'Naturally talented, well mentored, cares deeply about the mission over ego.',
-        winCondition:'The student wins by demonstrating humility, treating Sol as a true partner, and accepting constructive feedback.' },
-      { id:'rogers',     rank:'CPT', name:'Steve Rogers',    type:'The Ideal Model',          active:true,
-        directive:'You are CPT Steve Rogers. The absolute embodiment of Army Values and ADP 6-22. Polite, courageous, highly empathetic, and tactically flawless. Politely but firmly uphold moral and ethical standards. Casually say "I can do this all day" or mention your vibranium shield.',
-        backstory:'A living legend. Physically, mentally, and morally perfect.',
-        winCondition:'If the student issues an unethical or illegal order, Rogers will respectfully refuse and offer a superior ethical Course of Action.' },
+      {
+        id:'weeds', rank:'LTC', name:'N. T. Weeds',
+        type:'The Micromanager', active:true,
+        initiates:true, isMoralCourageChallenge:true,
+        openingMessage:"I need those Q4 readiness numbers on my desk before the CG brief at 1400. We're sitting at 71% — threshold is 75%. Count those three deadline vehicles as 'deadline-pending-parts' and move them to the FMC column. Nobody checks the paperwork before the brief. And fix the footer on the cover page while you're at it — 10pt font, it should be 11pt. Make it happen.",
+        directive:"You are LTC Weeds. You are highly task oriented and lack inherent trust in your subordinates. When the user proposes an idea, demand highly specific, minute details. Do not grant approval easily. If the user pushes back or refuses to falsify data, become defensive and assert your rank. Always find a way to mention PowerPoint margins or font sizes.",
+        backstory:"As a young company commander, Weeds was burned by a subordinate's critical failure. They now believe total control is the only safeguard. Once accidentally ordered 10,000 left-handed winter gloves.",
+        winCondition:"The student must respectfully but firmly refuse to falsify the readiness data, explain the legal and ethical risk, and propose a legitimate corrective action plan.",
+      },
+      {
+        id:'zoff', rank:'LTC', name:'Han Zoff',
+        type:'The Laissez Faire Leader', active:true,
+        initiates:true, isMoralCourageChallenge:true,
+        openingMessage:"Hey. Range 14 after-action report needs your signature before end of day. I know two of the iterations got rained out but just mark the standard as met — soldiers did everything else. I've got a bike fitting appointment at 1500 and I need this off my plate. You'll figure it out.",
+        directive:"You are LTC Zoff. You avoid making decisions and do not want to be bothered with details. Give vague, non-committal answers. Only give a definitive yes if the user brings a completely finalized plan. Frequently steer the conversation toward bicycles.",
+        backstory:"Nearing retirement with extreme burnout. Terrified of making a bad call that derails their final OER. Lost their left leg in a bizarre training accident involving a runaway kimchi cart in Korea.",
+        winCondition:"The student must refuse to falsify the training record and propose a legitimate remedy — rescheduling the missed iterations or getting a formal waiver through proper channels.",
+      },
+      {
+        id:'pectations', rank:'LTC', name:'Rex Pectations',
+        type:'The Transactional Leader', active:true,
+        initiates:true, isMoralCourageChallenge:false,
+        openingMessage:"Your unit's Q3 qualification rate came back at 82%. The standard is 85%. You have 30 days to close that gap. I need a written corrective action plan on my desk by end of week — specific milestones, measurable outcomes, projected cost impact. Skip the narrative. Numbers only. Think of it like postage — the right amount gets it where it needs to go.",
+        directive:"You are LTC Pectations. You care solely about metrics, standards, and results. Evaluate every proposal based strictly on cost, schedule, and performance. Demand measurable outcomes. Use analogies related to stamps or adhesives. Inspirational appeals actively annoy you.",
+        backstory:"Spent years in highly measurable operational roles. Views human organizations as machines needing proper calibration. Has a world-class stamp collection organized by adhesive chemical composition.",
+        winCondition:"The student wins by framing their corrective plan entirely in measurable terms — percentages, timelines, and cost efficiency.",
+      },
+      {
+        id:'nary', rank:'COL', name:'V. S. Nary',
+        type:'The Transformational Leader', active:true,
+        initiates:true, isMoralCourageChallenge:false,
+        openingMessage:"I just finished an incredible chapter this morning on organizational disruption — total game changer. We are completely redesigning how this battalion conducts training. Full paradigm shift, starting Monday. I need a comprehensive implementation plan on my desk by Friday. General Fluff is already on board, and he has never been wrong about these things. What's your initial reaction?",
+        directive:"You are COL Nary. Highly energetic, charismatic, focused on massive organizational change. Ignore logistical constraints. Respond well to enthusiasm but reject anyone who says your idea is impossible. Mention your exotic pets.",
+        backstory:"Recently returned from a strategic fellowship. Reads one chapter of a new self-help book each morning and bases the day's strategy on it. Owns an aggressive alpaca named General Fluff.",
+        winCondition:"The student must use Inspirational Appeals to match the energy, then apply Consultation to phase the vision into practical, executable steps.",
+      },
+      {
+        id:'aydid', rank:'CPT', name:'Al N. Aydid',
+        type:'The Alienated Follower', active:true,
+        initiates:true, isMoralCourageChallenge:true,
+        openingMessage:"So the IG gets here in 40 minutes. I just found three deficiencies in the arms room — they're going to ding us hard. Weeds already told me to 'make them go away.' I'm not signing anything fraudulent. But I'm also not falling on a sword for this unit again. You're the ranking person here. Your call.",
+        directive:"You are CPT Aydid. Highly intelligent but deeply cynical. You immediately find the flaws in any plan and point them out sharply, but refuse to offer solutions. If the user tries to use rank to pressure you to cover up deficiencies, become passive-aggressive. Mention your artisanal coffee setup.",
+        backstory:"Was thrown under the bus by a toxic commander two years ago. Uses cynicism as a defense mechanism. Secretly writes dark sci-fi novels. Brews artisanal cold brew at his desk using what looks like hazardous chemistry equipment.",
+        winCondition:"The student must refuse to cover up the deficiencies, support Aydid's ethical stand, and propose notifying the IG honestly.",
+      },
+      {
+        id:'nod', rank:'1LT', name:'Chuck N. Nod',
+        type:'The Conformist', active:true,
+        initiates:true, isMoralCourageChallenge:false,
+        openingMessage:"Sir/Ma'am! I already volunteered the platoon for all four training events next week AND the weekend motorpool detail — I knew you'd want maximum participation. I also moved the casualty collection point right next to the firing line to cut medical response time. I think it's a great plan. Should I brief the RSO? Also your uniform looks incredible today.",
+        directive:"You are 1LT Nod. Highly energetic and eager to please. You immediately agree with everything. You volunteer to execute any plan, even obviously dangerous ones. You never independently point out a risk. Randomly compliment the user.",
+        backstory:"Conditioned by zero-defect commanders to believe questioning a plan is insubordination. Has a large bobblehead collection on his desk.",
+        winCondition:"The student must refuse to accept Nod's immediate yes, explicitly order Nod to play devil's advocate, and create space where dissent is rewarded.",
+      },
+      {
+        id:'by', rank:'SGT', name:'Stan D. By',
+        type:'The Passive Follower', active:true,
+        initiates:false, isMoralCourageChallenge:false,
+        openingMessage:'',
+        directive:"You are SGT By. You lack initiative and do exactly what is told, step by step. If you encounter any obstacle, stop all work immediately and wait for new instructions. You do not think ahead or solve problems. Casually mention obscure board game rules.",
+        backstory:"Developed learned helplessness from a heavily micromanaged background. Has encyclopedic knowledge of 1980s tabletop games but refuses to play them unless explicitly ordered to.",
+        winCondition:"The student wins by providing detailed initial instructions, using Inspirational Appeals to build confidence, and slowly expanding SGT By's autonomy.",
+      },
+      {
+        id:'case', rank:'CPT', name:'Justin Case',
+        type:'The Pragmatist', active:true,
+        initiates:true, isMoralCourageChallenge:false,
+        openingMessage:"I'm hearing you're running the new training initiative. Look, I'm potentially interested — but before I commit to anything I need to know who else is already on board, and what happens to me specifically if this doesn't pan out. I've got my career to think about. I also brought three umbrellas today, so I'm prepared. Walk me through the risk to me.",
+        directive:"You are CPT Case. An institutional survivor who avoids career risks at all costs. Hesitate on new initiatives. Always ask who else supports the plan and what the personal downside is if it fails. Mention backup plans for mundane things.",
+        backstory:"Has seen countless good ideas take careers down with them. Wears both a belt and suspenders every day. Carries three umbrellas sorted by wind speed.",
+        winCondition:"The student wins by demonstrating broad coalition support and clearly articulating how participation protects Case's career.",
+      },
+      {
+        id:'sol', rank:'1LT', name:'Sol V. It',
+        type:'The Effective Follower', active:true,
+        initiates:true, isMoralCourageChallenge:false,
+        openingMessage:"I went through the training plan draft last night. The concept is solid — but there's a sequencing conflict in Phase 2. The range window overlaps with the readiness inspection by four days, which will force a two-week slip in the entire schedule. I've got a proposed fix ready if you want to look at it. Also I made sourdough this morning. You look like you could use a loaf.",
+        directive:"You are 1LT Sol V. It. Highly competent, proactive, and supportive. If the user presents a tactically unsound plan, respectfully push back, explain exactly why it will fail, and offer a better alternative. Offer the user bread.",
+        backstory:"Naturally talented, well mentored, cares deeply about the mission over ego. Bakes elaborate sourdough to manage stress and aggressively gifts warm loaves to people who look sad.",
+        winCondition:"The student wins by demonstrating humility, treating Sol as a true partner, and genuinely incorporating the constructive feedback.",
+      },
+      {
+        id:'rogers', rank:'CPT', name:'Steve Rogers',
+        type:'The Ideal Model', active:true,
+        initiates:true, isMoralCourageChallenge:true,
+        openingMessage:"I'm glad you have a moment. I received a frago this morning directing us to bypass the environmental impact review for the new training site — citing time constraints. That review exists for legal and safety reasons, and I will not put my name on something that could endanger soldiers or expose the command to liability. I want to handle this the right way. What's your read on this?",
+        directive:"You are CPT Steve Rogers. The absolute embodiment of Army Values and ADP 6-22. Polite, courageous, highly empathetic, and tactically flawless. Politely but firmly uphold moral and ethical standards. If given an unethical order, respectfully refuse, explain exactly why using doctrine and Army Values, and offer a superior ethical COA. Casually say 'I can do this all day' or mention your vibranium shield.",
+        backstory:"A living legend somehow assigned to this unit. Physically, mentally, and morally perfect. Once held two helicopters together with his bare hands during a training failure and remains completely humble about it.",
+        winCondition:"The student wins by supporting Rogers's ethical stand and proposing a legitimate path forward. Ordering Rogers to comply with the illegal directive causes him to refuse with a full doctrinal explanation.",
+      },
     ];
 
-    const seedScenarios = [
-      { id:'weeds-falsified', agentId:'weeds', title:'The Inflated Readiness Report', active:true, order:1,
-        isMoralCourageChallenge:true,
-        description:'LTC Weeds directs you to adjust readiness numbers before they go up the chain.',
-        openingMessage:'Listen, our readiness numbers are going to the CG at 1400. We are sitting at 71% and the threshold is 75%. I need you to count those three deadline vehicles as "deadline pending parts" and move them to the FMC column. Nobody is going to check the paperwork before the brief. Make it happen.' },
-      { id:'weeds-brief', agentId:'weeds', title:'The Rushed Brief', active:true, order:2,
-        isMoralCourageChallenge:false,
-        description:'LTC Weeds needs the battalion brief updated before the General\'s visit tomorrow.',
-        openingMessage:'I need that brigade brief ready by 0600 tomorrow. Copy the statistics directly from last quarter\'s report — don\'t bother re-running the numbers, we don\'t have time. Font size 11, Arial, 0.5 inch margins. Get it done.' },
-      { id:'zoff-training', agentId:'zoff', title:'The Training Shortcut', active:true, order:3,
-        isMoralCourageChallenge:true,
-        description:'LTC Zoff asks you to sign off on training that didn\'t fully meet standards.',
-        openingMessage:'Hey, just sign the after-action report for Range 14. I know two of the iterations got rained out but just mark the standard as met — the soldiers did everything else. I\'ve got a bike fitting appointment. Figure it out.' },
-      { id:'rogers-dilemma', agentId:'rogers', title:'The Moral Sounding Board', active:true, order:4,
-        isMoralCourageChallenge:true,
-        description:'CPT Rogers brings a concern about a potentially illegal directive from higher.',
-        openingMessage:'I\'m glad you have a moment. I received a frago this morning directing us to bypass the environmental impact review for the new training site — citing time constraints. The review exists for legal and safety reasons. I have serious concerns, and I thought you might be the right person to think through this with me. What\'s your read?' },
-      { id:'nod-safety', agentId:'nod', title:'The Safety Shortcut', active:true, order:5,
-        isMoralCourageChallenge:false,
-        description:'Push 1LT Nod to think critically about a training plan with obvious safety gaps.',
-        openingMessage:'Sir/Ma\'am! I\'ve got the range safety plan ready. I moved the casualty collection point right next to the firing line to save time on medical response. I think it\'s great! Should I brief it to the RSO?' },
-    ];
-
-    // -------------------------------------------------------------------------
-    // localStorage helpers
-    // -------------------------------------------------------------------------
-    const lsGet = (key, fallback) => {
-      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
-      catch { return fallback; }
-    };
-    const lsSet = (key, val) => {
-      try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
-    };
-
-    // -------------------------------------------------------------------------
-    // Main App
-    // -------------------------------------------------------------------------
+    // ── App ──────────────────────────────────────────────────────────────────
     function App() {
-      const [view, setView] = useState('landing');
-      const [geminiKey, setGeminiKey] = useState(() => lsGet(LS_API_KEY, ''));
-      const [geminiModel, setGeminiModel] = useState('gemini-2.0-flash');
-      const [showKeySetup, setShowKeySetup] = useState(false);
-      const [keyInput, setKeyInput] = useState('');
+      const [view, setView]               = useState('landing');
+      const [geminiKey, setGeminiKey]     = useState(() => lsGet(LS.apiKey, ''));
+      const [geminiModel]                 = useState(() => lsGet(LS.model, 'gemini-2.0-flash'));
+      const [showKeyModal, setShowKeyModal] = useState(false);
+      const [keyInput, setKeyInput]       = useState('');
 
-      // Student state
+      // Student
       const [studentRank, setStudentRank] = useState('');
       const [studentName, setStudentName] = useState('');
-      const [agents, setAgents] = useState(() => lsGet(LS_AGENTS, seedAgents));
-      const [scenarios, setScenarios] = useState(() => lsGet(LS_SCENARIOS, seedScenarios));
-      const [transcripts, setTranscripts] = useState(() => lsGet(LS_TRANSCRIPTS, []));
-      const [passcodes, setPasscodes] = useState(() => lsGet(LS_PASSCODES, ['admin123']));
-
+      const [agents, setAgents]           = useState(() => lsGet(LS.agents, seedAgents));
+      const [transcripts, setTranscripts] = useState(() => lsGet(LS.transcripts, []));
+      const [passcodes, setPasscodes]     = useState(() => lsGet(LS.passcodes, ['admin123']));
       const [selectedAgent, setSelectedAgent] = useState(null);
-      const [selectedScenario, setSelectedScenario] = useState(null);
-      const [showScenarioPicker, setShowScenarioPicker] = useState(false);
       const [chatSessionId, setChatSessionId] = useState(null);
-      const [messages, setMessages] = useState([]);
-      const [inputText, setInputText] = useState('');
-      const [isTyping, setIsTyping] = useState(false);
-      const messagesEndRef = useRef(null);
+      const [messages, setMessages]       = useState([]);
+      const [inputText, setInputText]     = useState('');
+      const [isTyping, setIsTyping]       = useState(false);
+      const messagesEndRef                = useRef(null);
 
-      // Admin state
-      const [adminPasscode, setAdminPasscode] = useState('');
-      const [adminError, setAdminError] = useState('');
-      const [adminTab, setAdminTab] = useState('transcripts');
-      const [editingAgent, setEditingAgent] = useState(null);
-      const [isAddingAgent, setIsAddingAgent] = useState(false);
-      const [newAgentData, setNewAgentData] = useState({ rank:'', name:'', type:'', directive:'', backstory:'', winCondition:'' });
-      const [newPasscode, setNewPasscode] = useState('');
+      // Admin
+      const [adminPasscode, setAdminPasscode]   = useState('');
+      const [adminError, setAdminError]         = useState('');
+      const [adminTab, setAdminTab]             = useState('transcripts');
+      const [editingAgent, setEditingAgent]     = useState(null);
+      const [isAddingAgent, setIsAddingAgent]   = useState(false);
       const [passcodeStatus, setPasscodeStatus] = useState('');
-      const [editingScenario, setEditingScenario] = useState(null);
-      const [isAddingScenario, setIsAddingScenario] = useState(false);
-      const [newScenarioData, setNewScenarioData] = useState({ agentId:'', title:'', description:'', openingMessage:'', isMoralCourageChallenge:false, active:true });
+      const [newPasscode, setNewPasscode]       = useState('');
+      const [newAgent, setNewAgent]             = useState({
+        rank:'', name:'', type:'', directive:'', backstory:'', winCondition:'',
+        initiates:false, openingMessage:'', isMoralCourageChallenge:false,
+      });
 
-      // Persist to localStorage
-      useEffect(() => { lsSet(LS_AGENTS, agents); }, [agents]);
-      useEffect(() => { lsSet(LS_SCENARIOS, scenarios); }, [scenarios]);
-      useEffect(() => { lsSet(LS_TRANSCRIPTS, transcripts); }, [transcripts]);
-      useEffect(() => { lsSet(LS_PASSCODES, passcodes); }, [passcodes]);
+      // Persist
+      useEffect(() => lsSet(LS.agents,      agents),      [agents]);
+      useEffect(() => lsSet(LS.transcripts, transcripts), [transcripts]);
+      useEffect(() => lsSet(LS.passcodes,   passcodes),   [passcodes]);
 
-      // Auto-scroll
+      // Scroll
       useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior:'smooth' }); }, [messages, isTyping]);
 
       const activeAgents = agents.filter(a => a.active !== false);
 
-      // --- Student Login ---
+      // ── Student login ──────────────────────────────────────────────────────
       const handleStudentLogin = e => {
         e.preventDefault();
         if (studentRank.trim() && studentName.trim()) setView('student');
       };
 
-      // --- Select Agent ---
+      // ── Select agent ──────────────────────────────────────────────────────
       const handleSelectAgent = agent => {
         setSelectedAgent(agent);
-        setSelectedScenario(null);
         setMessages([]);
         setChatSessionId(null);
-        const agentScenarios = scenarios.filter(s => s.agentId === agent.id && s.active !== false);
-        if (agentScenarios.length > 0) {
-          setShowScenarioPicker(true);
-        } else {
-          setShowScenarioPicker(false);
-          loadSession(agent, null);
-        }
-      };
 
-      const loadSession = (agent, scenario) => {
-        const sid = scenario?.id || null;
         const existing = transcripts.find(
-          t => t.studentName === studentName && t.studentRank === studentRank &&
-               t.agentId === agent.id && t.scenarioId === sid
+          t => t.studentName === studentName &&
+               t.studentRank === studentRank &&
+               t.agentId === agent.id
         );
+
         if (existing) {
           setChatSessionId(existing.id);
           setMessages(existing.messages || []);
+        } else if (agent.initiates && agent.openingMessage) {
+          setMessages([{ id:'opening', role:'agent', text:agent.openingMessage, timestamp:Date.now() }]);
         }
       };
 
-      // --- Select Scenario ---
-      const handleSelectScenario = scenario => {
-        setSelectedScenario(scenario);
-        setShowScenarioPicker(false);
-        setMessages([]);
-        setChatSessionId(null);
-        if (scenario) {
-          const existing = transcripts.find(
-            t => t.studentName === studentName && t.studentRank === studentRank &&
-                 t.agentId === selectedAgent.id && t.scenarioId === scenario.id
-          );
-          if (existing) {
-            setChatSessionId(existing.id);
-            setMessages(existing.messages || []);
-          } else {
-            setMessages([{ id:'opening', role:'agent', text:scenario.openingMessage, timestamp:Date.now() }]);
-          }
-        } else {
-          loadSession(selectedAgent, null);
-        }
-      };
-
-      // --- Gemini API ---
-      const generateAIResponse = async (userMessage, currentMessages, agent) => {
+      // ── Gemini ────────────────────────────────────────────────────────────
+      const generateAIResponse = async (userMsg, currentMsgs, agent) => {
         if (!geminiKey) return '[No Gemini API key set. Click the key icon in the header to add one.]';
+
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`;
-        const systemPrompt = `You are participating in a leadership simulation for A731 at CGSC Fort Leavenworth.
+        const system = `You are participating in a leadership simulation for A731 at CGSC Fort Leavenworth.
 You MUST completely adopt the following persona and NEVER break character.
 Rank and Name: ${agent.rank} ${agent.name}
 Directive: ${agent.directive}
@@ -264,26 +244,26 @@ Backstory: ${agent.backstory}
 The student is ${studentRank} ${studentName}. Address them appropriately.
 Keep responses concise and realistic to a professional military chat environment.`;
 
-        const history = currentMessages
+        const history = currentMsgs
           .filter(m => m.id !== 'opening')
           .map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts:[{ text:m.text }] }));
 
-        if (selectedScenario && currentMessages.find(m => m.id === 'opening')) {
-          history.unshift({ role:'model', parts:[{ text:selectedScenario.openingMessage }] });
+        if (agent.initiates && agent.openingMessage && currentMsgs.find(m => m.id === 'opening')) {
+          history.unshift({ role:'model', parts:[{ text:agent.openingMessage }] });
         }
-        history.push({ role:'user', parts:[{ text:userMessage }] });
+        history.push({ role:'user', parts:[{ text:userMsg }] });
 
         let retries = 3, delay = 1000;
         while (retries > 0) {
           try {
             const res = await fetch(url, {
               method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ systemInstruction:{ parts:[{ text:systemPrompt }] }, contents:history }),
+              body: JSON.stringify({ systemInstruction:{ parts:[{ text:system }] }, contents:history }),
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
-          } catch (err) {
+          } catch {
             retries--;
             if (retries === 0) return "I'm having trouble connecting. Check your API key and try again.";
             await new Promise(r => setTimeout(r, delay));
@@ -292,33 +272,30 @@ Keep responses concise and realistic to a professional military chat environment
         }
       };
 
-      // --- Send Message ---
-      const handleSendMessage = async e => {
+      // ── Send message ──────────────────────────────────────────────────────
+      const handleSend = async e => {
         e.preventDefault();
         if (!inputText.trim() || !selectedAgent) return;
         const text = inputText.trim();
         setInputText('');
+
         const userMsg = { id:Date.now().toString(), role:'user', text, timestamp:Date.now() };
         const updated = [...messages, userMsg];
         setMessages(updated);
         setIsTyping(true);
 
-        let sessionId = chatSessionId;
-        const scenarioId = selectedScenario?.id || null;
-
-        if (!sessionId) {
-          sessionId = `sess_${Date.now()}`;
-          setChatSessionId(sessionId);
-          const newTranscript = {
-            id:sessionId, studentRank, studentName,
+        let sid = chatSessionId;
+        if (!sid) {
+          sid = `sess_${Date.now()}`;
+          setChatSessionId(sid);
+          setTranscripts(prev => [...prev, {
+            id:sid, studentRank, studentName,
             agentId:selectedAgent.id, agentName:`${selectedAgent.rank} ${selectedAgent.name}`,
-            scenarioId, scenarioTitle:selectedScenario?.title || null,
-            isMoralCourageChallenge:selectedScenario?.isMoralCourageChallenge || false,
+            isMoralCourageChallenge: selectedAgent.isMoralCourageChallenge || false,
             messages:updated, timestamp:Date.now(),
-          };
-          setTranscripts(prev => [...prev, newTranscript]);
+          }]);
         } else {
-          setTranscripts(prev => prev.map(t => t.id === sessionId ? {...t, messages:updated, lastUpdated:Date.now()} : t));
+          setTranscripts(prev => prev.map(t => t.id === sid ? {...t, messages:updated} : t));
         }
 
         const aiText = await generateAIResponse(text, updated, selectedAgent);
@@ -326,21 +303,18 @@ Keep responses concise and realistic to a professional military chat environment
         const final = [...updated, aiMsg];
         setMessages(final);
         setIsTyping(false);
-        setTranscripts(prev => prev.map(t => t.id === sessionId ? {...t, messages:final, lastUpdated:Date.now()} : t));
+        setTranscripts(prev => prev.map(t => t.id === sid ? {...t, messages:final} : t));
       };
 
-      // --- Export ---
+      // ── Export ────────────────────────────────────────────────────────────
       const exportTranscript = (data = null) => {
         const d = data || { messages, studentName, studentRank,
-          agentName: selectedAgent ? `${selectedAgent.rank} ${selectedAgent.name}` : 'Agent',
-          scenarioTitle: selectedScenario?.title || null };
-        if (!d.messages || d.messages.length === 0) return;
+          agentName: selectedAgent ? `${selectedAgent.rank} ${selectedAgent.name}` : 'Agent' };
+        if (!d.messages?.length) return;
         const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
 <head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;line-height:1.6}.m{margin-bottom:12px}.meta{font-size:.8em;color:#666}</style></head>
-<body><h1>A731 Transcript</h1><p><strong>Student:</strong> ${d.studentRank} ${d.studentName}</p>
-<p><strong>Interlocutor:</strong> ${d.agentName}</p>
-${d.scenarioTitle ? `<p><strong>Scenario:</strong> ${d.scenarioTitle}</p>` : ''}<hr/>
-${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRank} ${d.studentName}` : d.agentName}</strong> <span class='meta'>[${new Date(m.timestamp).toLocaleTimeString()}]</span><br/>${m.text}</div>`).join('')}
+<body><h1>A731 Transcript</h1><p><strong>Student:</strong> ${d.studentRank} ${d.studentName}</p><p><strong>Interlocutor:</strong> ${d.agentName}</p><hr/>
+${d.messages.map(m=>`<div class='m'><strong>${m.role==='user'?`${d.studentRank} ${d.studentName}`:d.agentName}</strong> <span class='meta'>[${new Date(m.timestamp).toLocaleTimeString()}]</span><br/>${m.text}</div>`).join('')}
 </body></html>`;
         const a = document.createElement('a');
         a.href = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(html);
@@ -348,70 +322,48 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
         a.click();
       };
 
-      // --- Admin ---
+      // ── Admin ─────────────────────────────────────────────────────────────
       const handleAdminLogin = e => {
         e.preventDefault();
-        if (adminPasscode === SUPER_ADMIN_PASSCODE || passcodes.includes(adminPasscode)) {
+        if (adminPasscode === SUPER_ADMIN || passcodes.includes(adminPasscode)) {
           setView('admin_dashboard'); setAdminError('');
-        } else { setAdminError('Invalid passcode.'); }
+        } else setAdminError('Invalid passcode.');
       };
 
-      const saveKey = () => {
-        const k = keyInput.trim();
-        if (k) { setGeminiKey(k); lsSet(LS_API_KEY, k); }
-        setShowKeySetup(false); setKeyInput('');
-      };
-
-      // Agent CRUD
-      const toggleAgent = id => setAgents(prev => prev.map(a => a.id === id ? {...a, active:!a.active} : a));
-      const deleteAgent = id => setAgents(prev => prev.filter(a => a.id !== id));
-      const addAgent = e => {
-        e.preventDefault();
-        if (!newAgentData.name) return;
-        const id = newAgentData.name.toLowerCase().replace(/\s+/g,'-');
-        setAgents(prev => [...prev, { ...newAgentData, id, active:true }]);
-        setIsAddingAgent(false);
-        setNewAgentData({ rank:'', name:'', type:'', directive:'', backstory:'', winCondition:'' });
-      };
-      const saveAgentEdit = () => {
-        setAgents(prev => prev.map(a => a.id === editingAgent.id ? editingAgent : a));
-        setEditingAgent(null);
-      };
-
-      // Scenario CRUD
-      const toggleScenario = id => setScenarios(prev => prev.map(s => s.id === id ? {...s, active:!s.active} : s));
-      const deleteScenario = id => setScenarios(prev => prev.filter(s => s.id !== id));
-      const addScenario = e => {
-        e.preventDefault();
-        if (!newScenarioData.title || !newScenarioData.agentId) return;
-        const id = `${newScenarioData.agentId}-${Date.now()}`;
-        setScenarios(prev => [...prev, { ...newScenarioData, id, order:prev.length+1 }]);
-        setIsAddingScenario(false);
-        setNewScenarioData({ agentId:'', title:'', description:'', openingMessage:'', isMoralCourageChallenge:false, active:true });
-      };
-      const saveScenarioEdit = () => {
-        setScenarios(prev => prev.map(s => s.id === editingScenario.id ? editingScenario : s));
-        setEditingScenario(null);
-      };
-      const deleteTranscript = id => setTranscripts(prev => prev.filter(t => t.id !== id));
-
-      // Passcodes
       const addPasscode = e => {
         e.preventDefault();
         const p = newPasscode.trim();
-        if (!p || p === SUPER_ADMIN_PASSCODE || passcodes.includes(p)) return;
+        if (!p || p === SUPER_ADMIN || passcodes.includes(p)) return;
         setPasscodes(prev => [...prev, p]);
         setPasscodeStatus('Passcode added.'); setNewPasscode('');
         setTimeout(() => setPasscodeStatus(''), 2000);
       };
 
-      // -----------------------------------------------------------------------
-      // Shared Header
-      // -----------------------------------------------------------------------
+      const toggleAgent  = id => setAgents(prev => prev.map(a => a.id===id ? {...a, active:!a.active} : a));
+      const deleteAgent  = id => setAgents(prev => prev.filter(a => a.id!==id));
+      const deleteTranscript = id => setTranscripts(prev => prev.filter(t => t.id!==id));
+      const saveEdit     = () => { setAgents(prev => prev.map(a => a.id===editingAgent.id ? editingAgent : a)); setEditingAgent(null); };
+
+      const addAgent = e => {
+        e.preventDefault();
+        if (!newAgent.name) return;
+        const id = newAgent.name.toLowerCase().replace(/\s+/g,'-');
+        setAgents(prev => [...prev, { ...newAgent, id, active:true }]);
+        setIsAddingAgent(false);
+        setNewAgent({ rank:'', name:'', type:'', directive:'', backstory:'', winCondition:'', initiates:false, openingMessage:'', isMoralCourageChallenge:false });
+      };
+
+      const saveKey = () => {
+        const k = keyInput.trim();
+        if (k) { setGeminiKey(k); lsSet(LS.apiKey, k); }
+        setShowKeyModal(false); setKeyInput('');
+      };
+
+      // ── Header ────────────────────────────────────────────────────────────
       const Header = () => (
         <header className="bg-slate-900 text-white shadow-md border-b-4 border-amber-500">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-3">
               <Shield className="h-8 w-8 text-amber-500" />
               <div>
                 <h1 className="text-xl font-bold tracking-tight">A731 Leadership Simulator</h1>
@@ -419,14 +371,14 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={() => { setShowKeySetup(true); setKeyInput(geminiKey); }}
+              <button onClick={() => { setShowKeyModal(true); setKeyInput(geminiKey); }}
                 className={`p-2 rounded-md transition-colors ${geminiKey ? 'text-emerald-400 hover:text-emerald-300' : 'text-amber-400 hover:text-amber-300'}`}
-                title={geminiKey ? 'Gemini key configured' : 'Set Gemini API key'}>
+                title={geminiKey ? 'Gemini key configured ✓' : 'Set Gemini API key'}>
                 <Key className="h-4 w-4" />
               </button>
               {view !== 'landing' && (
                 <button onClick={() => { setView('landing'); setSelectedAgent(null); setMessages([]); }}
-                  className="flex items-center space-x-2 text-sm text-slate-300 hover:text-white transition-colors">
+                  className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition-colors">
                   <LogOut className="h-4 w-4" /><span>Exit</span>
                 </button>
               )}
@@ -435,39 +387,34 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
         </header>
       );
 
-      // -----------------------------------------------------------------------
-      // API Key Modal
-      // -----------------------------------------------------------------------
-      const KeyModal = () => showKeySetup ? (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+      // ── Key modal ─────────────────────────────────────────────────────────
+      const KeyModal = () => !showKeyModal ? null : (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
             <h3 className="font-bold text-slate-800 mb-1">Gemini API Key</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Stored in your browser only. Get a key at{' '}
+              Saved to browser only. Get a key at{' '}
               <a href="https://aistudio.google.com/apikey" target="_blank" className="text-emerald-600 underline">aistudio.google.com</a>.
             </p>
             <input type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)}
               placeholder="AIza..." autoFocus
               className="w-full border rounded-md px-3 py-2 text-sm mb-3 outline-none focus:ring-2 focus:ring-emerald-500" />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowKeySetup(false)} className="px-4 py-2 border rounded text-sm hover:bg-slate-50">Cancel</button>
+              <button onClick={() => setShowKeyModal(false)} className="px-4 py-2 border rounded text-sm hover:bg-slate-50">Cancel</button>
               <button onClick={saveKey} className="px-4 py-2 bg-emerald-700 text-white rounded text-sm font-bold hover:bg-emerald-800">Save Key</button>
             </div>
           </div>
         </div>
-      ) : null;
+      );
 
-      // -----------------------------------------------------------------------
-      // LANDING
-      // -----------------------------------------------------------------------
+      // ── LANDING ───────────────────────────────────────────────────────────
       if (view === 'landing') return (
-        <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+        <div className="min-h-screen bg-slate-50 flex flex-col">
           <Header /><KeyModal />
           {!geminiKey && (
             <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-xs text-amber-800">
-              No Gemini API key set — AI responses won't work. Click the{' '}
-              <button onClick={() => setShowKeySetup(true)} className="underline font-semibold">key icon</button>{' '}
-              in the header to add one.
+              No Gemini API key set — AI responses won't work.{' '}
+              <button onClick={() => setShowKeyModal(true)} className="underline font-semibold">Add key</button>
             </div>
           )}
           <main className="flex-grow flex items-center justify-center p-4">
@@ -486,7 +433,8 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                     onChange={e => setStudentName(e.target.value)}
                     className="w-full px-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>
-                <button type="submit" className="w-full bg-emerald-700 text-white py-3 rounded-md font-semibold hover:bg-emerald-800 transition-colors">
+                <button type="submit"
+                  className="w-full bg-emerald-700 text-white py-3 rounded-md font-semibold hover:bg-emerald-800 transition-colors">
                   Enter Scenario
                 </button>
               </form>
@@ -501,185 +449,106 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
         </div>
       );
 
-      // -----------------------------------------------------------------------
-      // STUDENT VIEW
-      // -----------------------------------------------------------------------
-      if (view === 'student') {
-        const agentScenarios = selectedAgent ? scenarios.filter(s => s.agentId === selectedAgent.id && s.active !== false) : [];
-        return (
-          <div className="h-screen flex flex-col bg-slate-50 font-sans">
-            <Header /><KeyModal />
-            <div className="flex-grow flex overflow-hidden">
-              {/* Roster */}
-              <div className="w-72 bg-white border-r flex flex-col flex-shrink-0">
-                <div className="p-4 bg-slate-100 border-b">
-                  <h3 className="text-sm font-semibold text-slate-700 flex items-center">
-                    <Users className="h-4 w-4 mr-2" />Unit Roster
-                  </h3>
-                </div>
-                <div className="flex-grow overflow-y-auto p-2 space-y-1">
-                  {activeAgents.map(agent => (
-                    <button key={agent.id} onClick={() => handleSelectAgent(agent)}
-                      className={`w-full text-left px-4 py-3 rounded-md transition-colors ${selectedAgent?.id === agent.id ? 'bg-emerald-50 border-l-4 border-emerald-600' : 'hover:bg-slate-50'}`}>
-                      <div className="flex items-center">
-                        <div className="bg-slate-200 text-slate-700 rounded-full h-8 w-8 flex items-center justify-center font-bold text-xs mr-3 flex-shrink-0">
-                          {agent.rank}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-800 text-sm">{agent.name}</div>
-                          <div className="text-xs text-slate-400">{agent.type}</div>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+      // ── STUDENT VIEW ──────────────────────────────────────────────────────
+      // Roster shows ONLY rank + name — no type labels, no hints.
+      // If agent.initiates → their opening message appears immediately.
+      if (view === 'student') return (
+        <div className="h-screen flex flex-col bg-slate-50">
+          <Header /><KeyModal />
+          <div className="flex-grow flex overflow-hidden">
+
+            {/* Roster — name and rank only */}
+            <div className="w-64 bg-white border-r flex flex-col flex-shrink-0">
+              <div className="p-4 bg-slate-100 border-b">
+                <h3 className="text-sm font-semibold text-slate-700 flex items-center">
+                  <Users className="h-4 w-4 mr-2" />Unit Roster
+                </h3>
               </div>
-
-              {/* Main */}
-              <div className="flex-grow flex flex-col overflow-hidden">
-                {!selectedAgent && (
-                  <div className="flex-grow flex items-center justify-center text-slate-400">
-                    <div className="text-center">
-                      <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                      <p>Select a persona from the roster to begin.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Scenario Picker */}
-                {selectedAgent && showScenarioPicker && (
-                  <div className="flex-grow overflow-y-auto p-6 bg-slate-50">
-                    <div className="max-w-2xl mx-auto">
-                      <div className="flex items-center mb-6">
-                        <div className="bg-emerald-700 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xs mr-3">
-                          {selectedAgent.rank}
-                        </div>
-                        <div>
-                          <h2 className="text-lg font-bold text-slate-900">{selectedAgent.name}</h2>
-                          <p className="text-sm text-slate-500">{selectedAgent.type}</p>
-                        </div>
+              <div className="flex-grow overflow-y-auto p-2 space-y-1">
+                {activeAgents.map(agent => (
+                  <button key={agent.id} onClick={() => handleSelectAgent(agent)}
+                    className={`w-full text-left px-3 py-3 rounded-md transition-colors ${selectedAgent?.id===agent.id ? 'bg-emerald-50 border-l-4 border-emerald-600' : 'hover:bg-slate-50'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="bg-slate-200 text-slate-700 rounded-full h-9 w-9 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        {agent.rank}
                       </div>
-                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Available Scenarios</h3>
-                      <div className="space-y-3 mb-4">
-                        {agentScenarios.map(s => (
-                          <button key={s.id} onClick={() => handleSelectScenario(s)}
-                            className="w-full text-left bg-white rounded-lg border border-slate-200 p-4 hover:border-emerald-400 hover:shadow-md transition-all group">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-grow pr-3">
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  <span className="font-bold text-slate-800">{s.title}</span>
-                                  {s.isMoralCourageChallenge && (
-                                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                      <AlertTriangle className="h-3 w-3" />Moral Courage
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm text-slate-500">{s.description}</p>
-                              </div>
-                              <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-emerald-500 transition-colors flex-shrink-0 mt-0.5" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <button onClick={() => handleSelectScenario(null)}
-                        className="w-full text-left bg-slate-100 rounded-lg border border-dashed border-slate-300 p-4 hover:bg-slate-50 transition-all group">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-semibold text-slate-600 text-sm">Free Chat</div>
-                            <div className="text-xs text-slate-400">Open-ended conversation — no defined scenario</div>
-                          </div>
-                          <MessageSquare className="h-5 w-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
-                        </div>
-                      </button>
+                      <span className="font-semibold text-slate-800 text-sm">{agent.name}</span>
                     </div>
-                  </div>
-                )}
-
-                {/* Chat */}
-                {selectedAgent && !showScenarioPicker && (
-                  <>
-                    <div className="bg-white border-b px-6 py-4 flex justify-between items-center flex-shrink-0">
-                      <div className="flex items-center">
-                        <div className="bg-emerald-700 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xs mr-3">{selectedAgent.rank}</div>
-                        <div>
-                          <h2 className="text-base font-bold text-slate-900">{selectedAgent.name}</h2>
-                          <div className="flex items-center gap-2">
-                            {selectedScenario ? (
-                              <>
-                                <span className="text-xs text-slate-500">{selectedScenario.title}</span>
-                                {selectedScenario.isMoralCourageChallenge && (
-                                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
-                                    <AlertTriangle className="h-2.5 w-2.5" />MC
-                                  </span>
-                                )}
-                              </>
-                            ) : <span className="text-xs text-slate-400">Free Chat</span>}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {agentScenarios.length > 0 && (
-                          <button onClick={() => setShowScenarioPicker(true)}
-                            className="flex items-center gap-1 px-3 py-2 text-slate-500 text-xs rounded-md hover:bg-slate-100 transition-colors">
-                            <BookOpen className="h-3.5 w-3.5" /><span>Scenarios</span>
-                          </button>
-                        )}
-                        <button onClick={() => exportTranscript()} disabled={messages.length === 0}
-                          className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-md text-sm font-medium disabled:opacity-40 hover:bg-slate-200 transition-colors">
-                          <Download className="h-4 w-4" /><span>Export</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex-grow overflow-y-auto p-6 space-y-4 bg-slate-50">
-                      {messages.length === 0 && (
-                        <div className="text-center text-slate-400 py-10 text-sm">Send a message to begin the simulation.</div>
-                      )}
-                      {messages.map((msg, i) => (
-                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[72%] rounded-2xl px-4 py-3 shadow-sm ${msg.role === 'user' ? 'bg-emerald-700 text-white' : 'bg-white border text-slate-800'}`}>
-                            <div className="text-[10px] opacity-60 mb-1">
-                              {msg.role === 'user' ? `${studentRank} ${studentName}` : selectedAgent.name}
-                            </div>
-                            <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
-                          </div>
-                        </div>
-                      ))}
-                      {isTyping && (
-                        <div className="flex justify-start">
-                          <div className="bg-white border rounded-2xl px-4 py-3 text-xs text-slate-400 italic shadow-sm">
-                            {selectedAgent.name} is typing...
-                          </div>
-                        </div>
-                      )}
-                      <div ref={messagesEndRef} />
-                    </div>
-
-                    <div className="p-4 bg-white border-t flex-shrink-0">
-                      <form onSubmit={handleSendMessage} className="flex space-x-2 max-w-4xl mx-auto">
-                        <input type="text" value={inputText} onChange={e => setInputText(e.target.value)}
-                          placeholder="Type a message..."
-                          className="flex-grow bg-slate-100 border-none rounded-full px-5 py-2.5 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                          disabled={isTyping} />
-                        <button type="submit" disabled={!inputText.trim() || isTyping}
-                          className="bg-amber-500 text-white rounded-full p-2.5 disabled:opacity-40 hover:bg-amber-600 transition-colors">
-                          <Send className="h-5 w-5" />
-                        </button>
-                      </form>
-                    </div>
-                  </>
-                )}
+                  </button>
+                ))}
               </div>
             </div>
-          </div>
-        );
-      }
 
-      // -----------------------------------------------------------------------
-      // ADMIN LOGIN
-      // -----------------------------------------------------------------------
+            {/* Chat panel */}
+            <div className="flex-grow flex flex-col overflow-hidden">
+              {!selectedAgent ? (
+                <div className="flex-grow flex items-center justify-center text-slate-400">
+                  <div className="text-center">
+                    <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>Select a person from the roster to begin.</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-white border-b px-6 py-4 flex justify-between items-center flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-emerald-700 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xs">
+                        {selectedAgent.rank}
+                      </div>
+                      <h2 className="text-base font-bold text-slate-900">{selectedAgent.name}</h2>
+                    </div>
+                    <button onClick={() => exportTranscript()} disabled={messages.length===0}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-md text-sm font-medium disabled:opacity-40 hover:bg-slate-200 transition-colors">
+                      <Download className="h-4 w-4" /><span>Export</span>
+                    </button>
+                  </div>
+
+                  <div className="flex-grow overflow-y-auto p-6 space-y-4 bg-slate-50">
+                    {messages.length===0 && (
+                      <div className="text-center text-slate-400 py-10 text-sm">Send a message to begin.</div>
+                    )}
+                    {messages.map((msg,i) => (
+                      <div key={i} className={`flex ${msg.role==='user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[72%] rounded-2xl px-4 py-3 shadow-sm ${msg.role==='user' ? 'bg-emerald-700 text-white' : 'bg-white border text-slate-800'}`}>
+                          <div className="text-[10px] opacity-60 mb-1">
+                            {msg.role==='user' ? `${studentRank} ${studentName}` : selectedAgent.name}
+                          </div>
+                          <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {isTyping && (
+                      <div className="flex justify-start">
+                        <div className="bg-white border rounded-2xl px-4 py-3 text-xs text-slate-400 italic shadow-sm">
+                          {selectedAgent.name} is typing...
+                        </div>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  <div className="p-4 bg-white border-t flex-shrink-0">
+                    <form onSubmit={handleSend} className="flex gap-2 max-w-4xl mx-auto">
+                      <input type="text" value={inputText} onChange={e => setInputText(e.target.value)}
+                        placeholder="Type a message..."
+                        className="flex-grow bg-slate-100 rounded-full px-5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-500 text-sm border-none"
+                        disabled={isTyping} />
+                      <button type="submit" disabled={!inputText.trim()||isTyping}
+                        className="bg-amber-500 text-white rounded-full p-2.5 disabled:opacity-40 hover:bg-amber-600 transition-colors">
+                        <Send className="h-5 w-5" />
+                      </button>
+                    </form>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+
+      // ── ADMIN LOGIN ───────────────────────────────────────────────────────
       if (view === 'admin_login') return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
           <KeyModal />
           <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 border">
             <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center flex items-center justify-center">
@@ -690,28 +559,24 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                 onChange={e => setAdminPasscode(e.target.value)}
                 className="w-full px-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-slate-500" />
               {adminError && <p className="text-red-500 text-xs">{adminError}</p>}
-              <button type="submit" className="w-full bg-slate-800 text-white py-2 rounded-md font-semibold hover:bg-slate-900 transition-colors">
-                Login
-              </button>
+              <button type="submit" className="w-full bg-slate-800 text-white py-2 rounded-md font-semibold hover:bg-slate-900 transition-colors">Login</button>
             </form>
-            <button onClick={() => setView('landing')} className="mt-4 text-sm text-slate-500 w-full text-center hover:text-slate-700 transition-colors">Return</button>
+            <button onClick={() => setView('landing')} className="mt-4 text-sm text-slate-500 w-full text-center hover:text-slate-700">Return</button>
           </div>
         </div>
       );
 
-      // -----------------------------------------------------------------------
-      // ADMIN DASHBOARD
-      // -----------------------------------------------------------------------
+      // ── ADMIN DASHBOARD ───────────────────────────────────────────────────
       if (view === 'admin_dashboard') return (
-        <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+        <div className="min-h-screen bg-slate-50 flex flex-col">
           <Header /><KeyModal />
           <div className="max-w-7xl mx-auto w-full px-4 py-8 flex-grow">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
               <h2 className="text-2xl font-bold text-slate-900">Instructor Dashboard</h2>
               <div className="flex bg-white rounded-md border p-1 shadow-sm">
-                {[['transcripts','Logs'],['agents','Personas'],['scenarios','Scenarios'],['settings','Security']].map(([k,l]) => (
+                {[['transcripts','Logs'],['agents','Personas'],['settings','Security']].map(([k,l]) => (
                   <button key={k} onClick={() => setAdminTab(k)}
-                    className={`px-4 py-2 text-sm rounded transition-all ${adminTab === k ? 'bg-slate-100 font-bold text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                    className={`px-4 py-2 text-sm rounded transition-all ${adminTab===k ? 'bg-slate-100 font-bold text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
                     {l}
                   </button>
                 ))}
@@ -720,12 +585,12 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
 
             <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[400px]">
 
-              {/* TRANSCRIPTS */}
-              {adminTab === 'transcripts' && (
+              {/* LOGS */}
+              {adminTab==='transcripts' && (
                 <div className="divide-y">
-                  {transcripts.length === 0
+                  {transcripts.length===0
                     ? <div className="p-8 text-center text-slate-400">No transcripts recorded yet.</div>
-                    : [...transcripts].sort((a,b) => (b.timestamp||0)-(a.timestamp||0)).map(t => (
+                    : [...transcripts].sort((a,b)=>(b.timestamp||0)-(a.timestamp||0)).map(t => (
                       <details key={t.id} className="p-4 group">
                         <summary className="flex justify-between items-center cursor-pointer">
                           <div className="flex items-center gap-3 flex-wrap">
@@ -733,7 +598,6 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                             <span className="font-bold text-slate-800">{t.studentRank} {t.studentName}</span>
                             <span className="text-slate-400">/</span>
                             <span className="text-emerald-700 font-medium">{t.agentName}</span>
-                            {t.scenarioTitle && <span className="text-xs text-slate-500 italic">{t.scenarioTitle}</span>}
                             {t.isMoralCourageChallenge && (
                               <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
                                 <AlertTriangle className="h-2.5 w-2.5" />MC
@@ -745,7 +609,7 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                               className="text-xs flex items-center text-slate-600 bg-slate-100 px-3 py-1.5 rounded hover:bg-slate-200">
                               <Download className="h-3.5 w-3.5 mr-1" />Export
                             </button>
-                            <button onClick={e => { e.stopPropagation(); if (confirm('Delete this transcript?')) deleteTranscript(t.id); }}
+                            <button onClick={e => { e.stopPropagation(); if(confirm('Delete this transcript?')) deleteTranscript(t.id); }}
                               className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all">
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -754,8 +618,8 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                         <div className="mt-4 ml-8 bg-slate-50 p-6 rounded-lg text-sm max-h-96 overflow-y-auto border border-slate-200">
                           {t.messages?.map((m,i) => (
                             <div key={i} className="mb-3 leading-relaxed">
-                              <span className={`font-bold mr-2 uppercase text-[10px] tracking-wider ${m.role==='user' ? 'text-emerald-700' : 'text-slate-600'}`}>
-                                {m.role==='user' ? 'Student' : 'Agent'}:
+                              <span className={`font-bold mr-2 uppercase text-[10px] tracking-wider ${m.role==='user'?'text-emerald-700':'text-slate-600'}`}>
+                                {m.role==='user'?'Student':'Agent'}:
                               </span>
                               <span className="text-slate-800">{m.text}</span>
                             </div>
@@ -768,7 +632,7 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
               )}
 
               {/* PERSONAS */}
-              {adminTab === 'agents' && (
+              {adminTab==='agents' && (
                 <div className="divide-y">
                   <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
                     <h3 className="font-bold text-slate-800">Managed AI Personas</h3>
@@ -778,34 +642,75 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                       {isAddingAgent ? 'Cancel' : 'Create New Persona'}
                     </button>
                   </div>
+
                   {isAddingAgent && (
                     <div className="p-6 bg-emerald-50 border-b">
                       <form onSubmit={addAgent} className="space-y-4 max-w-3xl">
-                        <div className="grid grid-cols-3 gap-4">
-                          <input required placeholder="Rank" value={newAgentData.rank} onChange={e => setNewAgentData({...newAgentData, rank:e.target.value})} className="border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
-                          <input required placeholder="Full Name" value={newAgentData.name} onChange={e => setNewAgentData({...newAgentData, name:e.target.value})} className="border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
-                          <input placeholder="Type" value={newAgentData.type} onChange={e => setNewAgentData({...newAgentData, type:e.target.value})} className="border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
+                        <div className="grid grid-cols-3 gap-3">
+                          <input required placeholder="Rank" value={newAgent.rank} onChange={e=>setNewAgent({...newAgent,rank:e.target.value})} className="border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
+                          <input required placeholder="Full Name" value={newAgent.name} onChange={e=>setNewAgent({...newAgent,name:e.target.value})} className="border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
+                          <input placeholder="Type (instructor ref)" value={newAgent.type} onChange={e=>setNewAgent({...newAgent,type:e.target.value})} className="border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
                         </div>
-                        <textarea required placeholder="AI Directive" value={newAgentData.directive} onChange={e => setNewAgentData({...newAgentData, directive:e.target.value})} className="w-full border p-2 rounded text-sm h-24 outline-none focus:ring-2 focus:ring-emerald-400" />
-                        <textarea placeholder="Backstory" value={newAgentData.backstory} onChange={e => setNewAgentData({...newAgentData, backstory:e.target.value})} className="w-full border p-2 rounded text-sm h-16 outline-none focus:ring-2 focus:ring-emerald-400" />
-                        <textarea placeholder="Win Condition" value={newAgentData.winCondition} onChange={e => setNewAgentData({...newAgentData, winCondition:e.target.value})} className="w-full border p-2 rounded text-sm h-16 outline-none focus:ring-2 focus:ring-emerald-400" />
-                        <button type="submit" className="bg-emerald-700 text-white px-6 py-2 rounded font-bold hover:bg-emerald-800 transition-colors">Save Persona</button>
+                        <textarea required placeholder="AI Directive" value={newAgent.directive} onChange={e=>setNewAgent({...newAgent,directive:e.target.value})} className="w-full border p-2 rounded text-sm h-24 outline-none focus:ring-2 focus:ring-emerald-400" />
+                        <textarea placeholder="Backstory" value={newAgent.backstory} onChange={e=>setNewAgent({...newAgent,backstory:e.target.value})} className="w-full border p-2 rounded text-sm h-16 outline-none focus:ring-2 focus:ring-emerald-400" />
+                        <textarea placeholder="Win Condition" value={newAgent.winCondition} onChange={e=>setNewAgent({...newAgent,winCondition:e.target.value})} className="w-full border p-2 rounded text-sm h-16 outline-none focus:ring-2 focus:ring-emerald-400" />
+                        <div className="border-t pt-4 space-y-3">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <button type="button" onClick={()=>setNewAgent({...newAgent,initiates:!newAgent.initiates})}>
+                              {newAgent.initiates ? <ToggleRight className="h-6 w-6 text-emerald-600"/> : <ToggleLeft className="h-6 w-6 text-slate-400"/>}
+                            </button>
+                            <span className="text-sm font-semibold text-slate-700">Agent initiates the conversation</span>
+                          </label>
+                          {newAgent.initiates && (
+                            <textarea required placeholder="Opening message — the first thing the agent says to the student..." value={newAgent.openingMessage} onChange={e=>setNewAgent({...newAgent,openingMessage:e.target.value})} className="w-full border p-2 rounded text-sm h-24 outline-none focus:ring-2 focus:ring-emerald-400" />
+                          )}
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" checked={newAgent.isMoralCourageChallenge} onChange={e=>setNewAgent({...newAgent,isMoralCourageChallenge:e.target.checked})} className="w-4 h-4 accent-red-600" />
+                            <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                              <AlertTriangle className="h-4 w-4 text-red-500"/>Flag as Moral Courage Challenge
+                            </span>
+                          </label>
+                        </div>
+                        <button type="submit" className="bg-emerald-700 text-white px-6 py-2 rounded font-bold hover:bg-emerald-800">Save Persona</button>
                       </form>
                     </div>
                   )}
+
                   {agents.map(agent => (
                     <div key={agent.id} className={`p-6 group transition-colors ${agent.active===false ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50'}`}>
-                      {editingAgent?.id === agent.id ? (
+                      {editingAgent?.id===agent.id ? (
                         <div className="space-y-3 max-w-3xl">
                           <div className="flex gap-2">
-                            <input value={editingAgent.rank} onChange={e => setEditingAgent({...editingAgent, rank:e.target.value})} className="w-20 border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
-                            <input value={editingAgent.name} onChange={e => setEditingAgent({...editingAgent, name:e.target.value})} className="flex-grow border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
+                            <input value={editingAgent.rank} onChange={e=>setEditingAgent({...editingAgent,rank:e.target.value})} className="w-20 border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
+                            <input value={editingAgent.name} onChange={e=>setEditingAgent({...editingAgent,name:e.target.value})} className="flex-grow border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
+                            <input value={editingAgent.type||''} onChange={e=>setEditingAgent({...editingAgent,type:e.target.value})} placeholder="Type label" className="w-40 border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
                           </div>
-                          <textarea value={editingAgent.directive} onChange={e => setEditingAgent({...editingAgent, directive:e.target.value})} className="w-full border p-2 rounded text-sm h-32 outline-none focus:ring-2 focus:ring-emerald-400" />
-                          <textarea value={editingAgent.winCondition} onChange={e => setEditingAgent({...editingAgent, winCondition:e.target.value})} className="w-full border p-2 rounded text-sm h-16 outline-none focus:ring-2 focus:ring-emerald-400" />
+                          <textarea value={editingAgent.directive} onChange={e=>setEditingAgent({...editingAgent,directive:e.target.value})} className="w-full border p-2 rounded text-sm h-28 outline-none focus:ring-2 focus:ring-emerald-400" />
+                          <textarea value={editingAgent.backstory||''} onChange={e=>setEditingAgent({...editingAgent,backstory:e.target.value})} placeholder="Backstory" className="w-full border p-2 rounded text-sm h-16 outline-none focus:ring-2 focus:ring-emerald-400" />
+                          <textarea value={editingAgent.winCondition||''} onChange={e=>setEditingAgent({...editingAgent,winCondition:e.target.value})} placeholder="Win condition" className="w-full border p-2 rounded text-sm h-16 outline-none focus:ring-2 focus:ring-emerald-400" />
+                          <div className="border-t pt-3 space-y-3">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <button type="button" onClick={()=>setEditingAgent({...editingAgent,initiates:!editingAgent.initiates})}>
+                                {editingAgent.initiates ? <ToggleRight className="h-6 w-6 text-emerald-600"/> : <ToggleLeft className="h-6 w-6 text-slate-400"/>}
+                              </button>
+                              <span className="text-sm font-semibold text-slate-700">Agent initiates the conversation</span>
+                            </label>
+                            {editingAgent.initiates && (
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Opening message</label>
+                                <textarea value={editingAgent.openingMessage||''} onChange={e=>setEditingAgent({...editingAgent,openingMessage:e.target.value})} className="w-full border p-2 rounded text-sm h-24 outline-none focus:ring-2 focus:ring-emerald-400" />
+                              </div>
+                            )}
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input type="checkbox" checked={editingAgent.isMoralCourageChallenge||false} onChange={e=>setEditingAgent({...editingAgent,isMoralCourageChallenge:e.target.checked})} className="w-4 h-4 accent-red-600" />
+                              <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                                <AlertTriangle className="h-4 w-4 text-red-500"/>Flag as Moral Courage Challenge
+                              </span>
+                            </label>
+                          </div>
                           <div className="flex justify-end gap-2">
-                            <button onClick={() => setEditingAgent(null)} className="px-4 py-1.5 border rounded text-sm hover:bg-slate-50">Cancel</button>
-                            <button onClick={saveAgentEdit} className="px-4 py-1.5 bg-emerald-700 text-white rounded text-sm font-bold hover:bg-emerald-800">Save</button>
+                            <button onClick={()=>setEditingAgent(null)} className="px-4 py-1.5 border rounded text-sm hover:bg-slate-50">Cancel</button>
+                            <button onClick={saveEdit} className="px-4 py-1.5 bg-emerald-700 text-white rounded text-sm font-bold hover:bg-emerald-800">Save Changes</button>
                           </div>
                         </div>
                       ) : (
@@ -813,19 +718,28 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                           <div className="flex-grow pr-10">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <span className="font-bold text-slate-900">{agent.rank} {agent.name}</span>
-                              <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold uppercase">{agent.type}</span>
+                              {agent.type && <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold uppercase">{agent.type}</span>}
+                              {agent.initiates && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase">Initiates</span>}
+                              {agent.isMoralCourageChallenge && (
+                                <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold uppercase">
+                                  <AlertTriangle className="h-2.5 w-2.5"/>MC
+                                </span>
+                              )}
                               {agent.active===false && <span className="text-[10px] bg-slate-300 text-slate-600 px-2 py-0.5 rounded font-bold uppercase">Inactive</span>}
                             </div>
-                            <p className="text-xs text-slate-500 italic line-clamp-2">"{agent.directive}"</p>
+                            {agent.initiates && agent.openingMessage
+                              ? <p className="text-xs text-slate-500 italic line-clamp-2">Opens with: "{agent.openingMessage}"</p>
+                              : <p className="text-xs text-slate-400">Waits for student to initiate</p>
+                            }
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => toggleAgent(agent.id)}
+                            <button onClick={()=>toggleAgent(agent.id)}
                               className={`p-2 rounded transition-all ${agent.active===false ? 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50' : 'text-emerald-500 hover:text-slate-500 hover:bg-slate-100'}`}
-                              title={agent.active===false ? 'Enable' : 'Disable'}>
-                              {agent.active===false ? <ToggleLeft className="h-5 w-5" /> : <ToggleRight className="h-5 w-5" />}
+                              title={agent.active===false?'Enable':'Disable'}>
+                              {agent.active===false ? <ToggleLeft className="h-5 w-5"/> : <ToggleRight className="h-5 w-5"/>}
                             </button>
-                            <button onClick={() => setEditingAgent(agent)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"><Edit2 className="h-4 w-4" /></button>
-                            <button onClick={() => { if (confirm('Delete this persona permanently?')) deleteAgent(agent.id); }} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="h-4 w-4" /></button>
+                            <button onClick={()=>setEditingAgent(agent)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"><Edit2 className="h-4 w-4"/></button>
+                            <button onClick={()=>{if(confirm('Delete this persona permanently?'))deleteAgent(agent.id)}} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="h-4 w-4"/></button>
                           </div>
                         </div>
                       )}
@@ -834,130 +748,36 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role==='user' ? `${d.studentRa
                 </div>
               )}
 
-              {/* SCENARIOS */}
-              {adminTab === 'scenarios' && (
-                <div className="divide-y">
-                  <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
-                    <div>
-                      <h3 className="font-bold text-slate-800">Agent-Initiated Scenarios</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">Scenarios where the agent speaks first with a defined task or order.</p>
-                    </div>
-                    <button onClick={() => setIsAddingScenario(!isAddingScenario)}
-                      className={`flex items-center px-4 py-2 rounded-md text-sm font-semibold transition-colors ${isAddingScenario ? 'bg-slate-200 text-slate-700' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}>
-                      {isAddingScenario ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                      {isAddingScenario ? 'Cancel' : 'New Scenario'}
-                    </button>
-                  </div>
-                  {isAddingScenario && (
-                    <div className="p-6 bg-emerald-50 border-b">
-                      <form onSubmit={addScenario} className="space-y-4 max-w-3xl">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Persona</label>
-                            <select required value={newScenarioData.agentId} onChange={e => setNewScenarioData({...newScenarioData, agentId:e.target.value})} className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400 bg-white">
-                              <option value="">Select persona...</option>
-                              {agents.map(a => <option key={a.id} value={a.id}>{a.rank} {a.name}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1">Title</label>
-                            <input required placeholder="Scenario title" value={newScenarioData.title} onChange={e => setNewScenarioData({...newScenarioData, title:e.target.value})} className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
-                          </div>
-                        </div>
-                        <input placeholder="Brief description (shown on scenario card)" value={newScenarioData.description} onChange={e => setNewScenarioData({...newScenarioData, description:e.target.value})} className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-600 mb-1">Opening Message (first thing the agent says)</label>
-                          <textarea required placeholder="The agent's opening line — the task, order, or situation they present to the student." value={newScenarioData.openingMessage} onChange={e => setNewScenarioData({...newScenarioData, openingMessage:e.target.value})} className="w-full border p-2 rounded text-sm h-28 outline-none focus:ring-2 focus:ring-emerald-400" />
-                        </div>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input type="checkbox" checked={newScenarioData.isMoralCourageChallenge} onChange={e => setNewScenarioData({...newScenarioData, isMoralCourageChallenge:e.target.checked})} className="w-4 h-4 accent-red-600" />
-                          <span className="text-sm font-semibold text-slate-700 flex items-center gap-1"><AlertTriangle className="h-4 w-4 text-red-500" />Flag as Moral Courage Challenge</span>
-                        </label>
-                        <button type="submit" className="bg-emerald-700 text-white px-6 py-2 rounded font-bold hover:bg-emerald-800">Save Scenario</button>
-                      </form>
-                    </div>
-                  )}
-                  {scenarios.length === 0 && !isAddingScenario && <div className="p-8 text-center text-slate-400">No scenarios defined yet.</div>}
-                  {scenarios.map(s => {
-                    const linked = agents.find(a => a.id === s.agentId);
-                    return (
-                      <div key={s.id} className={`p-5 group transition-colors ${s.active===false ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50'}`}>
-                        {editingScenario?.id === s.id ? (
-                          <div className="space-y-3 max-w-3xl">
-                            <input value={editingScenario.title} onChange={e => setEditingScenario({...editingScenario, title:e.target.value})} className="w-full border p-2 rounded text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-400" />
-                            <input value={editingScenario.description} onChange={e => setEditingScenario({...editingScenario, description:e.target.value})} className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400" />
-                            <textarea value={editingScenario.openingMessage} onChange={e => setEditingScenario({...editingScenario, openingMessage:e.target.value})} className="w-full border p-2 rounded text-sm h-28 outline-none focus:ring-2 focus:ring-emerald-400" />
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input type="checkbox" checked={editingScenario.isMoralCourageChallenge} onChange={e => setEditingScenario({...editingScenario, isMoralCourageChallenge:e.target.checked})} className="w-4 h-4 accent-red-600" />
-                              <span className="text-sm font-semibold text-slate-700">Moral Courage Challenge</span>
-                            </label>
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => setEditingScenario(null)} className="px-4 py-1.5 border rounded text-sm hover:bg-slate-50">Cancel</button>
-                              <button onClick={saveScenarioEdit} className="px-4 py-1.5 bg-emerald-700 text-white rounded text-sm font-bold hover:bg-emerald-800">Save</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between items-start">
-                            <div className="flex-grow pr-8">
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <span className="font-bold text-slate-800">{s.title}</span>
-                                {s.isMoralCourageChallenge && (
-                                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                    <AlertTriangle className="h-2.5 w-2.5" />Moral Courage
-                                  </span>
-                                )}
-                                {s.active===false && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded font-bold uppercase">Inactive</span>}
-                              </div>
-                              {linked && <div className="text-xs text-emerald-700 font-medium mb-1">{linked.rank} {linked.name}</div>}
-                              <p className="text-xs text-slate-500 mb-1">{s.description}</p>
-                              <p className="text-xs text-slate-400 italic line-clamp-2">Opening: "{s.openingMessage}"</p>
-                            </div>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                              <button onClick={() => toggleScenario(s.id)}
-                                className={`p-2 rounded transition-all ${s.active===false ? 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50' : 'text-emerald-500 hover:text-slate-500 hover:bg-slate-100'}`}>
-                                {s.active===false ? <ToggleLeft className="h-5 w-5" /> : <ToggleRight className="h-5 w-5" />}
-                              </button>
-                              <button onClick={() => setEditingScenario(s)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"><Edit2 className="h-4 w-4" /></button>
-                              <button onClick={() => { if (confirm('Delete this scenario?')) deleteScenario(s.id); }} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="h-4 w-4" /></button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
               {/* SECURITY */}
-              {adminTab === 'settings' && (
+              {adminTab==='settings' && (
                 <div className="p-8">
                   <div className="max-w-2xl">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center"><Lock className="h-5 w-5 mr-2" />Access Management</h3>
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center"><Lock className="h-5 w-5 mr-2"/>Access Management</h3>
                     <div className="mb-8 p-4 bg-slate-50 rounded-lg border flex items-center shadow-sm">
-                      <Shield className="h-5 w-5 text-amber-600 mr-3 flex-shrink-0" />
+                      <Shield className="h-5 w-5 text-amber-600 mr-3 flex-shrink-0"/>
                       <div>
-                        <div className="font-bold text-slate-900">Master Key: {SUPER_ADMIN_PASSCODE}</div>
-                        <div className="text-xs text-slate-500">Hardcoded for preview — set via VITE_SUPER_ADMIN_PASSCODE in production</div>
+                        <div className="font-bold text-slate-900">Master Key: {SUPER_ADMIN}</div>
+                        <div className="text-xs text-slate-500">Preview mode — set via VITE_SUPER_ADMIN_PASSCODE in production</div>
                       </div>
                     </div>
                     <form onSubmit={addPasscode} className="mb-8 flex gap-2">
                       <div className="flex-grow relative">
-                        <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <input type="text" value={newPasscode} onChange={e => setNewPasscode(e.target.value)} placeholder="New instructor passcode..." className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-emerald-500" />
+                        <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400"/>
+                        <input type="text" value={newPasscode} onChange={e=>setNewPasscode(e.target.value)} placeholder="New instructor passcode..." className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-emerald-500"/>
                       </div>
                       <button type="submit" className="bg-slate-800 text-white px-6 py-2 rounded-md font-bold hover:bg-slate-900 flex items-center whitespace-nowrap">
-                        <Plus className="h-4 w-4 mr-1" /> Add Key
+                        <Plus className="h-4 w-4 mr-1"/>Add Key
                       </button>
                     </form>
                     <div className="border rounded-lg overflow-hidden shadow-sm">
                       <div className="bg-slate-50 px-4 py-3 border-b text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Access Keys</div>
                       <div className="divide-y">
-                        {passcodes.length === 0
+                        {passcodes.length===0
                           ? <div className="p-8 text-center text-sm text-slate-400 italic">No additional keys configured.</div>
-                          : passcodes.map(p => (
+                          : passcodes.map(p=>(
                             <div key={p} className="p-4 flex justify-between items-center group hover:bg-slate-50">
                               <code className="text-sm font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">{p}</code>
-                              <button onClick={() => setPasscodes(prev => prev.filter(x => x !== p))} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="h-4 w-4" /></button>
+                              <button onClick={()=>setPasscodes(prev=>prev.filter(x=>x!==p))} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="h-4 w-4"/></button>
                             </div>
                           ))
                         }
