@@ -295,7 +295,7 @@ Keep responses concise and realistic to a professional military chat environment
 
     history.push({ role: 'user', parts: [{ text: userMessage }] });
 
-    let retries = 5, delay = 1000;
+    let retries = 3, delay = 1000;
     while (retries > 0) {
       try {
         const res = await fetch(url, {
@@ -306,12 +306,20 @@ Keep responses concise and realistic to a professional military chat environment
             contents: history,
           }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+          // Don't retry on client errors
+          if (res.status === 400 || res.status === 403 || res.status === 404) {
+            return `[API Error: ${errMsg}]`;
+          }
+          throw new Error(errMsg);
+        }
         const data = await res.json();
         return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
       } catch (err) {
         retries--;
-        if (retries === 0) return "I'm having trouble connecting right now. Please try again.";
+        if (retries === 0) return `[Connection error: ${err.message}]`;
         await new Promise(r => setTimeout(r, delay));
         delay *= 2;
       }
