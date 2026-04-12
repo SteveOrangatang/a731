@@ -985,11 +985,11 @@ ${d.messages.map(m => `<div class='m'><strong>${m.role === 'user' ? `${d.student
                       {siteAccessCodes.length === 0
                         ? <div className="p-8 text-center text-sm text-slate-400 italic">No codes added yet. Only the master key can access.</div>
                         : siteAccessCodes.map(p => (
-                          <div key={p} className="px-4 py-3 flex justify-between items-center group hover:bg-slate-50">
+                          <div key={p} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50">
                             <code className="text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded font-mono">{p}</code>
                             <button onClick={() => handleRemoveSiteCode(p)}
-                              className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all" title="Revoke code">
-                              <Trash2 className="h-4 w-4" />
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 rounded transition-colors" title="Revoke code">
+                              <Trash2 className="h-3.5 w-3.5" />Revoke
                             </button>
                           </div>
                         ))
