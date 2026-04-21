@@ -54,9 +54,11 @@ export default function TranscriptsTab({ transcripts, onDelete }) {
                   if (window.confirm('Delete this transcript permanently?'))
                     onDelete(t.id);
                 }}
-                className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                title="Delete this transcript"
+                className="text-xs flex items-center text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded hover:bg-red-100 hover:border-red-300 transition-colors"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Delete
               </button>
             </div>
           </summary>

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Header from '../Header';
 import PaperSubmission from './PaperSubmission';
+import TranscriptViewer from './TranscriptViewer';
 
 /** Sorted lesson ids (by lesson.order). */
 function lessonKeys(lessons) {
@@ -36,9 +37,11 @@ export default function StudentDashboard({
   onOpenLesson,
   onSignOut,
   onSubmitPaper,
+  onDeleteTranscript,
   onEnterAdmin,
 }) {
   const [paperLesson, setPaperLesson] = useState(null);
+  const [viewingTranscript, setViewingTranscript] = useState(null);
 
   const keys = lessonKeys(lessons);
   const fallbackLessonId = keys[0] || 'lesson1';
@@ -202,20 +205,28 @@ export default function StudentDashboard({
                         Past chats ({lessonTranscripts.length})
                       </summary>
                       <ul className="mt-2 space-y-1">
-                        {lessonTranscripts.map((t) => (
-                          <li
-                            key={t.id}
-                            className="text-xs text-slate-600 flex items-center justify-between"
-                          >
-                            <span className="truncate">{t.agentName}</span>
-                            <span className="text-slate-400 ml-2 flex-shrink-0">
-                              {(t.messages || []).filter(
-                                (m) => m.role === 'user',
-                              ).length}{' '}
-                              msgs
-                            </span>
-                          </li>
-                        ))}
+                        {lessonTranscripts.map((t) => {
+                          const count = (t.messages || []).filter(
+                            (m) => m.role === 'user',
+                          ).length;
+                          return (
+                            <li key={t.id}>
+                              <button
+                                onClick={() => setViewingTranscript(t)}
+                                className="w-full text-left text-xs text-slate-700 flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-slate-100 transition-colors"
+                                title="View or delete this conversation"
+                              >
+                                <span className="truncate flex items-center gap-1.5">
+                                  <MessageSquare className="h-3 w-3 text-emerald-600 flex-shrink-0" />
+                                  {t.agentName}
+                                </span>
+                                <span className="text-slate-400 flex-shrink-0">
+                                  {count} msgs
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </details>
                   )}
@@ -257,6 +268,16 @@ export default function StudentDashboard({
           )}
           onSubmit={onSubmitPaper}
           onClose={() => setPaperLesson(null)}
+        />
+      )}
+
+      {viewingTranscript && (
+        <TranscriptViewer
+          transcript={viewingTranscript}
+          onClose={() => setViewingTranscript(null)}
+          onDelete={async (id) => {
+            if (onDeleteTranscript) await onDeleteTranscript(id);
+          }}
         />
       )}
     </div>

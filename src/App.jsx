@@ -21,6 +21,7 @@ export default function App() {
     allTranscripts,
     submissions,
     upsertSubmission,
+    deleteTranscript,
   } = firestoreSync;
 
   // ── Navigation ─────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ export default function App() {
         onOpenLesson={openLesson}
         onSignOut={handleSignOut}
         onSubmitPaper={upsertSubmission}
+        onDeleteTranscript={deleteTranscript}
         onEnterAdmin={() => setIsAdmin(true)}
       />
     );
