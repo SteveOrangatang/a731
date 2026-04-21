@@ -1,200 +1,356 @@
-import React, { useState } from 'react';
-import { Lock, ShieldAlert, Shield, Key, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  Shield,
+  ShieldAlert,
+  UserPlus,
+  Trash2,
+  Mail,
+  Key,
+  User as UserIcon,
+  AlertTriangle,
+  Loader2,
+  Check,
+} from 'lucide-react';
 
+const RANKS = [
+  '', '1LT', '2LT', 'CPT', 'MAJ', 'LTC', 'COL',
+  'SFC', 'MSG', 'SGM', 'CSM',
+  'CW2', 'CW3', 'CW4',
+  'Dr.', 'Mr.', 'Ms.',
+];
+
+/**
+ * Admin user management. Admins are full Firebase Auth accounts with
+ * role='admin'. This tab is where an existing admin creates additional
+ * admin accounts (email + password) and revokes / removes them.
+ *
+ * The master env-var passcode (VITE_SUPER_ADMIN_PASSCODE) remains as a
+ * bootstrap fallback so you can always get in if no admin account exists yet.
+ */
 export default function SecurityTab({
-  siteAccessCodes,
-  storedPasscodes,
-  onAddSiteCode,
-  onRemoveSiteCode,
-  onAddPasscode,
-  onRemovePasscode,
+  users,
+  onCreateAdmin,
+  onSetRole,
+  onRemoveUser,
 }) {
-  const [newSiteCode, setNewSiteCode]       = useState('');
-  const [siteCodeStatus, setSiteCodeStatus] = useState('');
-  const [newPasscode, setNewPasscode]        = useState('');
-  const [passcodeStatus, setPasscodeStatus]  = useState('');
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    rank: '',
+    lastName: '',
+  });
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [rowBusy, setRowBusy] = useState(null);
+  const [confirmRemove, setConfirmRemove] = useState(null);
 
-  const handleAddSiteCode = async (e) => {
+  const admins = useMemo(
+    () =>
+      (users || [])
+        .filter((u) => u.role === 'admin')
+        .sort((a, b) =>
+          (a.lastName || '').localeCompare(b.lastName || ''),
+        ),
+    [users],
+  );
+
+  const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleCreate = async (e) => {
     e.preventDefault();
-    const p = newSiteCode.trim();
-    if (!p) return;
+    setError('');
+    setStatus('');
+    if (!form.email.trim() || !form.password) {
+      setError('Email and password are required.');
+      return;
+    }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters (Firebase minimum).');
+      return;
+    }
+    if (!form.lastName.trim()) {
+      setError('Last name is required.');
+      return;
+    }
+    setBusy(true);
     try {
-      await onAddSiteCode(p);
-      setSiteCodeStatus('Code added.');
-      setNewSiteCode('');
-      setTimeout(() => setSiteCodeStatus(''), 2500);
+      await onCreateAdmin({
+        email: form.email.trim(),
+        password: form.password,
+        rank: form.rank.trim(),
+        lastName: form.lastName.trim(),
+      });
+      setStatus(`Admin account created for ${form.email.trim()}.`);
+      setForm({ email: '', password: '', rank: '', lastName: '' });
+      setTimeout(() => setStatus(''), 3500);
     } catch (err) {
-      console.error(err);
+      setError(friendlyAuthError(err));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleAddPasscode = async (e) => {
-    e.preventDefault();
-    const p = newPasscode.trim();
-    if (!p) return;
+  const handleRevoke = async (u) => {
+    setError('');
+    setRowBusy(u.uid);
     try {
-      await onAddPasscode(p);
-      setPasscodeStatus('Passcode added.');
-      setNewPasscode('');
-      setTimeout(() => setPasscodeStatus(''), 2000);
+      await onSetRole(u.uid, 'student');
     } catch (err) {
-      console.error(err);
+      setError(err?.message || 'Revoke failed.');
+    } finally {
+      setRowBusy(null);
     }
   };
 
   return (
     <div className="p-8">
       <div className="max-w-2xl space-y-10">
-        {/* ── SECTION 1: Site Access Codes ── */}
-        <div>
-          <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
-            <Lock className="h-5 w-5 mr-2 text-amber-500" />
-            Site Access Codes
-          </h3>
-          <p className="text-xs text-slate-500 mb-6">
-            These codes unlock the splash screen entry gate. Share one with each
-            student or cohort. The master key (CPTAMERICA) always works and does
-            not appear here.
-          </p>
-
-          <form onSubmit={handleAddSiteCode} className="mb-6 flex gap-2">
-            <div className="flex-grow relative">
-              <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                value={newSiteCode}
-                onChange={(e) => setNewSiteCode(e.target.value)}
-                placeholder="New access code..."
-                className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-amber-400 uppercase"
-              />
-            </div>
-            <button
-              type="submit"
-              className="bg-amber-500 text-slate-900 px-6 py-2 rounded-md font-bold hover:bg-amber-400 flex items-center whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Code
-            </button>
-          </form>
-
-          <div className="border rounded-lg overflow-hidden shadow-sm">
-            <div className="bg-slate-50 px-4 py-3 border-b text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-              <Shield className="h-3 w-3" />
-              Active Site Access Codes
-            </div>
-            <div className="divide-y">
-              {siteAccessCodes.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-400 italic">
-                  No codes added yet. Only the master key can access.
-                </div>
-              ) : (
-                siteAccessCodes.map((p) => (
-                  <div
-                    key={p}
-                    className="px-4 py-3 flex justify-between items-center hover:bg-slate-50"
-                  >
-                    <code className="text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded font-mono">
-                      {p}
-                    </code>
-                    <button
-                      onClick={() => onRemoveSiteCode(p)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 rounded transition-colors"
-                      title="Revoke code"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Revoke
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          {siteCodeStatus && (
-            <p className="mt-3 text-sm text-emerald-700 font-bold">
-              {siteCodeStatus}
-            </p>
-          )}
-        </div>
-
-        {/* ── SECTION 2: Admin Passcodes ── */}
+        {/* ── Master bootstrap notice ── */}
         <div>
           <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
             <ShieldAlert className="h-5 w-5 mr-2 text-slate-500" />
-            Admin Passcodes
+            Admin access
           </h3>
-          <p className="text-xs text-slate-500 mb-6">
-            These codes grant access to this Instructor Dashboard (not the
-            student sim).
+          <p className="text-xs text-slate-500 mb-4">
+            Admins are full accounts (email + password) with the admin role.
+            They sign in like any student and see an <strong>Admin Portal</strong> button
+            on their dashboard. Use the form below to create additional admins.
           </p>
-
-          <div className="mb-6 p-4 bg-slate-50 rounded-lg border flex items-center shadow-sm">
-            <Shield className="h-5 w-5 text-amber-600 mr-3 flex-shrink-0" />
-            <div>
-              <div className="font-bold text-slate-900 text-sm">
-                Master admin key active
+          <div className="p-4 bg-slate-50 rounded-lg border flex items-start gap-3 shadow-sm">
+            <Shield className="h-5 w-5 text-amber-600 mr-1 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-600 leading-relaxed">
+              <div className="font-bold text-slate-900 text-sm mb-1">
+                Master bootstrap key
               </div>
-              <div className="text-xs text-slate-500">
-                Set via VITE_SUPER_ADMIN_PASSCODE env variable
-              </div>
+              The value in <code className="bg-slate-200 px-1 rounded">VITE_SUPER_ADMIN_PASSCODE</code> still
+              unlocks the Instructor Dashboard from the hidden <em>Admin Portal</em> link
+              on the login screen. Keep this key out of student hands — it&#39;s your
+              emergency way in if no admin account exists yet.
             </div>
           </div>
+        </div>
 
-          <form onSubmit={handleAddPasscode} className="mb-6 flex gap-2">
-            <div className="flex-grow relative">
-              <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+        {/* ── Create new admin ── */}
+        <div>
+          <h4 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-indigo-600" />
+            Create admin account
+          </h4>
+
+          <form onSubmit={handleCreate} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="relative">
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => update('email', e.target.value)}
+                  placeholder="email@example.mil"
+                  className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="relative">
+                <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => update('password', e.target.value)}
+                  placeholder="Password (6+ chars)"
+                  className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <select
+                value={form.rank}
+                onChange={(e) => update('rank', e.target.value)}
+                className="px-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <option value="">(No rank)</option>
+                {RANKS.filter(Boolean).map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
-                value={newPasscode}
-                onChange={(e) => setNewPasscode(e.target.value)}
-                placeholder="New admin passcode..."
-                className="w-full pl-10 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-slate-500"
+                value={form.lastName}
+                onChange={(e) => update('lastName', e.target.value)}
+                placeholder="Last name"
+                className="sm:col-span-2 px-3 py-2 border rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
-            <button
-              type="submit"
-              className="bg-slate-800 text-white px-6 py-2 rounded-md font-bold hover:bg-slate-900 flex items-center whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Key
-            </button>
-          </form>
 
-          <div className="border rounded-lg overflow-hidden shadow-sm">
-            <div className="bg-slate-50 px-4 py-3 border-b text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              Additional Admin Keys
+            {error && (
+              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+            {status && (
+              <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>{status}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={busy}
+                className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserPlus className="h-4 w-4" />
+                )}
+                {busy ? 'Creating…' : 'Create admin'}
+              </button>
             </div>
-            <div className="divide-y">
-              {storedPasscodes.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-400 italic">
-                  No additional admin keys configured.
-                </div>
-              ) : (
-                storedPasscodes.map((p) => (
-                  <div
-                    key={p}
-                    className="px-4 py-3 flex justify-between items-center group hover:bg-slate-50"
-                  >
-                    <code className="text-sm font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">
-                      {p}
-                    </code>
+          </form>
+        </div>
+
+        {/* ── Existing admins ── */}
+        <div>
+          <h4 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-indigo-600" />
+            Current admin accounts
+            <span className="text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase">
+              {admins.length}
+            </span>
+          </h4>
+          {admins.length === 0 ? (
+            <div className="border border-dashed rounded-lg p-6 text-center text-xs text-slate-400">
+              No admin accounts yet. Create one above, or promote an existing
+              user from the <strong>Users</strong> tab.
+            </div>
+          ) : (
+            <div className="border rounded-lg divide-y overflow-hidden">
+              {admins.map((u) => (
+                <div
+                  key={u.uid}
+                  className="p-4 flex flex-wrap items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex-shrink-0 h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center">
+                      <UserIcon className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-900 text-sm truncate">
+                        {u.rank} {u.lastName}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5 truncate">
+                        <Mail className="h-3 w-3" />
+                        <span className="truncate">{u.email}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      onClick={() => onRemovePasscode(p)}
-                      className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                      disabled={rowBusy === u.uid}
+                      onClick={() => handleRevoke(u)}
+                      className="inline-flex items-center gap-1.5 bg-white border text-slate-700 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+                      title="Remove admin rights (account becomes a regular student)"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Revoke admin
+                    </button>
+                    <button
+                      disabled={rowBusy === u.uid}
+                      onClick={() => setConfirmRemove(u)}
+                      className="inline-flex items-center gap-1.5 bg-white border text-red-600 border-red-200 px-3 py-1.5 rounded text-xs font-semibold hover:bg-red-50 disabled:opacity-50"
+                      title="Delete this admin profile"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
                     </button>
                   </div>
-                ))
-              )}
+                </div>
+              ))}
             </div>
-          </div>
-          {passcodeStatus && (
-            <p className="mt-3 text-sm text-emerald-700 font-bold">
-              {passcodeStatus}
-            </p>
           )}
+        </div>
+      </div>
+
+      {confirmRemove && (
+        <ConfirmRemoveModal
+          user={confirmRemove}
+          onCancel={() => setConfirmRemove(null)}
+          onConfirm={async () => {
+            setRowBusy(confirmRemove.uid);
+            try {
+              await onRemoveUser(confirmRemove.uid);
+              setConfirmRemove(null);
+            } catch (err) {
+              setError(err?.message || 'Remove failed.');
+            } finally {
+              setRowBusy(null);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmRemoveModal({ user, onCancel, onConfirm }) {
+  const [working, setWorking] = useState(false);
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 bg-red-50 rounded-full">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900">
+              Remove {user.rank} {user.lastName}?
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Their admin profile will be deleted and they will lose access
+              immediately. The Firebase Auth record is NOT deleted, so they
+              could re-register unless you also delete the auth record from
+              the Firebase console.
+            </p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            onClick={onCancel}
+            disabled={working}
+            className="px-4 py-2 border rounded text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={working}
+            onClick={async () => {
+              setWorking(true);
+              await onConfirm();
+              setWorking(false);
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+          >
+            {working ? 'Removing…' : 'Remove admin'}
+          </button>
         </div>
       </div>
     </div>
   );
+}
+
+function friendlyAuthError(err) {
+  const code = err?.code || '';
+  if (code === 'auth/email-already-in-use')
+    return 'That email already has an account. Promote it from the Users tab instead.';
+  if (code === 'auth/invalid-email') return 'That email address is not valid.';
+  if (code === 'auth/weak-password')
+    return 'Password is too weak — Firebase requires at least 6 characters.';
+  return err?.message || 'Create failed. Please try again.';
 }

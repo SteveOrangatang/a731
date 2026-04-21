@@ -67,6 +67,7 @@ export default function App() {
     return (
       <AdminDashboard
         firestoreSync={firestoreSync}
+        onCreateAdmin={auth.createAdminAccount}
         onExit={() => setIsAdmin(false)}
       />
     );

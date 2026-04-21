@@ -8,7 +8,7 @@ import LessonsTab from './LessonsTab';
 import SubmissionsTab from './SubmissionsTab';
 import UsersTab from './UsersTab';
 
-export default function AdminDashboard({ firestoreSync, onExit }) {
+export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit }) {
   const [tab, setTab] = useState('submissions');
   const [seeding, setSeeding] = useState(false);
   const [seedStatus, setSeedStatus] = useState('');
@@ -17,8 +17,6 @@ export default function AdminDashboard({ firestoreSync, onExit }) {
     agents,
     users,
     allTranscripts,
-    storedPasscodes,
-    siteAccessCodes,
     lessons,
     rubrics,
     submissions,
@@ -27,10 +25,6 @@ export default function AdminDashboard({ firestoreSync, onExit }) {
     createAgent,
     updateAgent,
     deleteTranscript,
-    addSiteCode,
-    removeSiteCode,
-    addPasscode,
-    removePasscode,
     upsertLesson,
     deleteLesson,
     reassignAgentsLesson,
@@ -177,12 +171,10 @@ export default function AdminDashboard({ firestoreSync, onExit }) {
           )}
           {tab === 'settings' && (
             <SecurityTab
-              siteAccessCodes={siteAccessCodes}
-              storedPasscodes={storedPasscodes}
-              onAddSiteCode={addSiteCode}
-              onRemoveSiteCode={removeSiteCode}
-              onAddPasscode={addPasscode}
-              onRemovePasscode={removePasscode}
+              users={users}
+              onCreateAdmin={onCreateAdmin}
+              onSetRole={setUserRole}
+              onRemoveUser={removeUser}
             />
           )}
         </div>

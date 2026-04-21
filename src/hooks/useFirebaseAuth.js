@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { initializeApp, deleteApp } from 'firebase/app';
 import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -6,6 +7,7 @@ import {
   signInAnonymously,
   signOut as firebaseSignOut,
   updateProfile,
+  getAuth as getSecondaryAuth,
 } from 'firebase/auth';
 import { onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, ref } from '../config/firebase';
@@ -86,5 +88,57 @@ export function useFirebaseAuth() {
 
   const signOut = () => firebaseSignOut(auth);
 
-  return { user, profile, loading, signUp, signIn, signOut };
+  /**
+   * Creates a brand-new admin account without disturbing the current session.
+   * Uses a secondary Firebase app instance so the caller stays signed in.
+   */
+  const createAdminAccount = async ({ email, password, rank, lastName }) => {
+    if (!auth) throw new Error('Firebase not configured');
+
+    // Spin up a secondary app with the same config (auth only) so the
+    // createUser call does NOT hijack the primary session.
+    const secondaryApp = initializeApp(auth.app.options, `admin-create-${Date.now()}`);
+    const secondaryAuth = getSecondaryAuth(secondaryApp);
+
+    try {
+      const cred = await createUserWithEmailAndPassword(
+        secondaryAuth,
+        email,
+        password,
+      );
+      try {
+        await updateProfile(cred.user, {
+          displayName: `${rank || ''} ${lastName || ''}`.trim(),
+        });
+      } catch (_) {}
+
+      await setDoc(ref('users', cred.user.uid), {
+        uid: cred.user.uid,
+        email,
+        rank: rank || '',
+        lastName: lastName || '',
+        role: 'admin',
+        status: 'approved',
+        createdAt: serverTimestamp(),
+        createdBy: user?.uid || null,
+      });
+
+      await firebaseSignOut(secondaryAuth);
+      return cred.user;
+    } finally {
+      try {
+        await deleteApp(secondaryApp);
+      } catch (_) {}
+    }
+  };
+
+  return {
+    user,
+    profile,
+    loading,
+    signUp,
+    signIn,
+    signOut,
+    createAdminAccount,
+  };
 }
