@@ -2244,7 +2244,7 @@ const scenario6 = [
 
   {
     // ─── PEER 2: Hitler (new trainee, high potential) ─────────────────────────
-    id: 's6_hitch',
+    id: 's6_hitler',
     scenarioId: 'scenario6',
     lessonId: 'lesson6',
     role: 'subordinate',

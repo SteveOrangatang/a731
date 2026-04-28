@@ -189,6 +189,18 @@ export function useFirestoreSync(user) {
           .filter((a) => a.scenarioId === 'scenario6')
           .forEach((a) => setDoc(ref('agents', a.id), a));
       } else {
+        // Rename migration: s6_hitch → s6_hitler. If the old doc still
+        // exists, replace it with the renamed seed and delete the legacy.
+        const legacyHitch = data.find((a) => a.id === 's6_hitch');
+        const newHitlerSeed = initialAgents.find((a) => a.id === 's6_hitler');
+        const hitlerExists = data.some((a) => a.id === 's6_hitler');
+        if (legacyHitch && newHitlerSeed && !hitlerExists) {
+          setDoc(ref('agents', 's6_hitler'), newHitlerSeed);
+          deleteDoc(ref('agents', 's6_hitch'));
+        } else if (legacyHitch && hitlerExists) {
+          // Both exist somehow; clean up the orphan.
+          deleteDoc(ref('agents', 's6_hitch'));
+        }
         setAgents(data.sort((a, b) => a.name.localeCompare(b.name)));
       }
     });
