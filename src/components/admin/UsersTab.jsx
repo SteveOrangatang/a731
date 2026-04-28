@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users,
   Check,
@@ -297,7 +298,43 @@ function ScenarioMultiSelect({
   onSetDifficulty,
 }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
+  const buttonRef = useRef(null);
   const assigned = userAssignedIds(user);
+
+  // Compute dropdown anchor relative to the viewport. Re-compute on every
+  // open and when the window scrolls/resizes so the dropdown stays anchored
+  // to the button. Rendering via portal escapes the row container's
+  // `overflow-hidden`, which was previously clipping the dropdown.
+  const positionDropdown = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const dropdownWidth = 320; // w-80
+    const estimatedHeight = Math.min(
+      32 * 16, // 32rem cap
+      Math.max(180, scenarioOptions.length * 80 + 60),
+    );
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+    setCoords({
+      top: openUp ? rect.top - 4 : rect.bottom + 4,
+      left: Math.max(8, Math.min(rect.right - dropdownWidth, window.innerWidth - dropdownWidth - 8)),
+      openUp,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    positionDropdown();
+    const onChange = () => positionDropdown();
+    window.addEventListener('scroll', onChange, true);
+    window.addEventListener('resize', onChange);
+    return () => {
+      window.removeEventListener('scroll', onChange, true);
+      window.removeEventListener('resize', onChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const toggle = (id) => {
     const next = assigned.includes(id)
@@ -306,31 +343,21 @@ function ScenarioMultiSelect({
     onAssign(next);
   };
 
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setOpen((v) => !v)}
-        className="text-xs border rounded px-3 py-1.5 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
-        title="Assign one or more scenarios"
-      >
-        <span>
-          {assigned.length === 0
-            ? 'Assign scenarios'
-            : `${assigned.length} scenario${assigned.length === 1 ? '' : 's'}`}
-        </span>
-        <span className="text-slate-400">▾</span>
-      </button>
-      {open && (
+  const dropdown = open
+    ? createPortal(
         <>
           <div
-            className="fixed inset-0 z-30"
+            className="fixed inset-0 z-[60]"
             onClick={() => setOpen(false)}
           />
           <div
-            className="absolute right-0 top-full mt-1 z-40 bg-white border rounded-md shadow-lg p-2 w-80 overflow-y-auto"
-            style={{ maxHeight: 'min(32rem, calc(100vh - 8rem))' }}
+            className="fixed z-[70] bg-white border rounded-md shadow-lg p-2 w-80 overflow-y-auto"
+            style={{
+              top: coords.openUp ? undefined : coords.top,
+              bottom: coords.openUp ? window.innerHeight - coords.top : undefined,
+              left: coords.left,
+              maxHeight: 'min(32rem, calc(100vh - 4rem))',
+            }}
           >
             {scenarioOptions.length === 0 && (
               <div className="text-xs text-slate-400 px-2 py-1">No scenarios available</div>
@@ -405,8 +432,29 @@ function ScenarioMultiSelect({
               </div>
             )}
           </div>
-        </>
-      )}
+        </>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen((v) => !v)}
+        className="text-xs border rounded px-3 py-1.5 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+        title="Assign one or more scenarios"
+      >
+        <span>
+          {assigned.length === 0
+            ? 'Assign scenarios'
+            : `${assigned.length} scenario${assigned.length === 1 ? '' : 's'}`}
+        </span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {dropdown}
     </div>
   );
 }
