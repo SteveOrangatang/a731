@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, Activity, X } from 'lucide-react';
 import Header from '../Header';
 import TranscriptsTab from './TranscriptsTab';
 import PersonasTab from './PersonasTab';
@@ -7,11 +7,15 @@ import SecurityTab from './SecurityTab';
 import LessonsTab from './LessonsTab';
 import SubmissionsTab from './SubmissionsTab';
 import UsersTab from './UsersTab';
+import { testModelRotation } from '../../utils/gemini';
 
 export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit }) {
   const [tab, setTab] = useState('submissions');
   const [seeding, setSeeding] = useState(false);
   const [seedStatus, setSeedStatus] = useState('');
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diagResults, setDiagResults] = useState(null);
 
   const {
     agents,
@@ -35,12 +39,28 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
     rejectUser,
     setUserRole,
     removeUser,
+    assignScenarioToUser,
+    setScenarioDifficulty,
     seedDemoData,
   } = firestoreSync;
 
   const pendingCount = (users || []).filter(
     (u) => u.status === 'pending',
   ).length;
+
+  const handleTestModels = async () => {
+    setDiagOpen(true);
+    setDiagRunning(true);
+    setDiagResults(null);
+    try {
+      const results = await testModelRotation();
+      setDiagResults(results);
+    } catch (err) {
+      setDiagResults([{ model: '(error)', status: 'error', detail: err.message }]);
+    } finally {
+      setDiagRunning(false);
+    }
+  };
 
   const handleSeed = async () => {
     if (
@@ -92,6 +112,19 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <button
+              onClick={handleTestModels}
+              disabled={diagRunning}
+              className="inline-flex items-center gap-2 bg-white border px-3 py-2 rounded-md text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Ping each Gemini model in the rotation and report availability"
+            >
+              {diagRunning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Activity className="h-3.5 w-3.5 text-indigo-500" />
+              )}
+              {diagRunning ? 'Testing…' : 'Test Gemini rotation'}
+            </button>
+            <button
               onClick={handleSeed}
               disabled={seeding}
               className="inline-flex items-center gap-2 bg-white border px-3 py-2 rounded-md text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -136,10 +169,13 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
           {tab === 'users' && (
             <UsersTab
               users={users}
+              lessons={lessons}
               onApprove={approveUser}
               onReject={rejectUser}
               onSetRole={setUserRole}
               onRemove={removeUser}
+              onAssignScenario={assignScenarioToUser}
+              onSetDifficulty={setScenarioDifficulty}
             />
           )}
           {tab === 'transcripts' && (
@@ -179,6 +215,94 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
           )}
         </div>
       </div>
+
+      {diagOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-indigo-600" />
+                  Gemini Rotation Status
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Pings each model in the rotation with a one-token prompt.
+                  Models that report <span className="font-semibold text-emerald-700">ok</span> are available right now.
+                  <span className="font-semibold text-amber-700"> rate-limited</span> means temporarily capped (will recover on its own).
+                  <span className="font-semibold text-rose-700"> not-found</span> or <span className="font-semibold text-rose-700">forbidden</span> means your API key cannot use that model;
+                  remove it from your VITE_GEMINI_FALLBACK_MODELS.
+                </p>
+              </div>
+              <button
+                onClick={() => setDiagOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {diagRunning ? (
+              <div className="flex items-center gap-2 py-6 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Pinging each model in the rotation…
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    <tr>
+                      <th className="text-left p-2 w-12">Key</th>
+                      <th className="text-left p-2">Model</th>
+                      <th className="text-left p-2 w-32">Status</th>
+                      <th className="text-left p-2">Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {(diagResults || []).map((r, i) => (
+                      <tr key={`${r.keyIndex}-${r.model}-${i}`}>
+                        <td className="p-2 font-mono text-xs text-slate-500">
+                          #{r.keyIndex || 1}
+                        </td>
+                        <td className="p-2 font-mono text-xs">{r.model}</td>
+                        <td className="p-2">
+                          <span
+                            className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                              r.status === 'ok'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : r.status === 'rate-limited'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="p-2 text-xs text-slate-600 truncate max-w-md">
+                          {r.detail}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={handleTestModels}
+                disabled={diagRunning}
+                className="px-4 py-2 border rounded text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Re-test
+              </button>
+              <button
+                onClick={() => setDiagOpen(false)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-semibold hover:bg-indigo-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

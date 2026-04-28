@@ -19,16 +19,27 @@ import { saveAs } from 'file-saver';
  * @param {Object} params
  * @param {Object} params.grade        Output of generateGrade()
  * @param {Object} params.studentMeta  { rank, lastName, email, lessonTitle }
- * @param {Array}  params.messages     Full transcript
+ * @param {Array}  [params.conversations]  Preferred: [{ agentName, messages }]
+ *                                         renders each persona's chat under
+ *                                         its own heading.
+ * @param {Array}  [params.messages]   Legacy fallback: flat message list.
+ *                                     Used only if conversations is absent.
  * @param {string} params.paperText    Student's paper
  */
 export async function downloadGradeReport({
   grade,
   studentMeta,
+  conversations,
   messages,
   paperText,
 }) {
-  const doc = buildGradeReport({ grade, studentMeta, messages, paperText });
+  const doc = buildGradeReport({
+    grade,
+    studentMeta,
+    conversations,
+    messages,
+    paperText,
+  });
   const blob = await Packer.toBlob(doc);
   const safeName = (studentMeta.lastName || 'student').replace(/\s+/g, '_');
   const safeLesson = (studentMeta.lessonTitle || 'lesson').replace(/\s+/g, '_');
@@ -50,7 +61,7 @@ function plainPara(text, opts = {}) {
   });
 }
 
-function buildGradeReport({ grade, studentMeta, messages, paperText }) {
+function buildGradeReport({ grade, studentMeta, conversations, messages, paperText }) {
   const criteria = Array.isArray(grade?.criteria) ? grade.criteria : [];
   const totalScore = grade?.totalScore ?? criteria.reduce(
     (s, c) => s + (Number(c.score) || 0), 0,
@@ -103,20 +114,57 @@ function buildGradeReport({ grade, studentMeta, messages, paperText }) {
     children.push(plainPara(line));
   });
 
-  // Conversation transcript
+  // Conversation transcript — grouped by persona when conversations is given
   children.push(headingPara('Conversation Transcript'));
-  (messages || []).forEach((m) => {
-    const who = m.role === 'user'
-      ? `${studentMeta.rank || ''} ${studentMeta.lastName || 'Student'}`.trim()
-      : 'Interlocutor';
-    children.push(new Paragraph({
-      children: [
-        new TextRun({ text: `${who}: `, bold: true }),
-        new TextRun({ text: m.text || '' }),
-      ],
-      spacing: { after: 100 },
-    }));
-  });
+  const studentLabel = `${studentMeta.rank || ''} ${studentMeta.lastName || 'Student'}`.trim();
+
+  if (Array.isArray(conversations) && conversations.length > 0) {
+    conversations.forEach((conv) => {
+      children.push(headingPara(
+        `Conversation with ${conv.agentName || 'Persona'}`,
+        HeadingLevel.HEADING_2,
+      ));
+      const convMsgs = (conv.messages || []).filter(
+        (m) => m.id !== 'opening' || m.text,
+      );
+      if (convMsgs.length === 0) {
+        children.push(plainPara('(no messages)', { italics: true }));
+        return;
+      }
+      convMsgs.forEach((m) => {
+        const who = m.role === 'user' ? studentLabel : (conv.agentName || 'Persona');
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: `${who}: `, bold: true }),
+            new TextRun({ text: m.text || '' }),
+          ],
+          spacing: { after: 100 },
+        }));
+      });
+    });
+  } else {
+    // Legacy flat-list fallback: heuristically render the SubmissionsTab
+    // dividers as section headings.
+    (messages || []).forEach((m) => {
+      const text = m.text || '';
+      const dividerMatch = text.match(/^\s*---\s*Conversation\s*\d+:\s*(.+?)\s*---\s*$/);
+      if (dividerMatch) {
+        children.push(headingPara(
+          `Conversation with ${dividerMatch[1]}`,
+          HeadingLevel.HEADING_2,
+        ));
+        return;
+      }
+      const who = m.role === 'user' ? studentLabel : 'Persona';
+      children.push(new Paragraph({
+        children: [
+          new TextRun({ text: `${who}: `, bold: true }),
+          new TextRun({ text }),
+        ],
+        spacing: { after: 100 },
+      }));
+    });
+  }
 
   return new Document({
     sections: [{ children }],

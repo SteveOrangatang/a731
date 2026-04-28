@@ -7,3 +7,11 @@ dist
 *.zip
 check_imports.cjs
 check_imports.js
+
+# Temp QA artifacts produced while iterating on the docx/pptx generators
+_qa_inspect/
+_qa3_inspect/
+_slide_inspect/
+
+# Pre-restructure source backup (local-only safety net)
+src.pre-restructure.*/

@@ -14,14 +14,24 @@ import {
 
 export default function UsersTab({
   users,
+  lessons,
   onApprove,
   onReject,
   onSetRole,
   onRemove,
+  onAssignScenario,
+  onSetDifficulty,
 }) {
   const [busy, setBusy] = useState(null); // uid currently being mutated
   const [error, setError] = useState('');
   const [confirmRemove, setConfirmRemove] = useState(null);
+
+  // Sorted scenario options (lessonId -> title)
+  const scenarioOptions = useMemo(() => {
+    return Object.values(lessons || {})
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map((l) => ({ id: l.id, title: l.title || l.id }));
+  }, [lessons]);
 
   const { pending, approved, other } = useMemo(() => {
     const p = [];
@@ -144,8 +154,29 @@ export default function UsersTab({
                 key={u.uid}
                 className="p-4 flex flex-wrap items-center justify-between gap-3"
               >
-                <UserMeta user={u} />
+                <UserMeta
+                  user={u}
+                  scenarioOptions={scenarioOptions}
+                />
                 <div className="flex items-center gap-2 flex-wrap">
+                  {onAssignScenario && u.role !== 'admin' && (
+                    <ScenarioMultiSelect
+                      user={u}
+                      scenarioOptions={scenarioOptions}
+                      busy={busy === u.uid}
+                      onAssign={(ids) =>
+                        withBusy(u.uid, () => onAssignScenario(u.uid, ids))
+                      }
+                      onSetDifficulty={
+                        onSetDifficulty
+                          ? (id, level) =>
+                              withBusy(u.uid, () =>
+                                onSetDifficulty(u.uid, id, level),
+                              )
+                          : null
+                      }
+                    />
+                  )}
                   {u.role === 'admin' ? (
                     <button
                       disabled={busy === u.uid}
@@ -246,7 +277,142 @@ export default function UsersTab({
   );
 }
 
-function UserMeta({ user }) {
+function userAssignedIds(user) {
+  if (Array.isArray(user.assignedScenarioIds)) {
+    return user.assignedScenarioIds.filter(Boolean);
+  }
+  if (user.assignedScenarioId) return [user.assignedScenarioId];
+  return [];
+}
+
+function userDifficulty(user, scenarioId) {
+  return user?.scenarioDifficulty?.[scenarioId] === 'hard' ? 'hard' : 'normal';
+}
+
+function ScenarioMultiSelect({
+  user,
+  scenarioOptions,
+  busy,
+  onAssign,
+  onSetDifficulty,
+}) {
+  const [open, setOpen] = useState(false);
+  const assigned = userAssignedIds(user);
+
+  const toggle = (id) => {
+    const next = assigned.includes(id)
+      ? assigned.filter((x) => x !== id)
+      : [...assigned, id];
+    onAssign(next);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen((v) => !v)}
+        className="text-xs border rounded px-3 py-1.5 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+        title="Assign one or more scenarios"
+      >
+        <span>
+          {assigned.length === 0
+            ? 'Assign scenarios'
+            : `${assigned.length} scenario${assigned.length === 1 ? '' : 's'}`}
+        </span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 top-full mt-1 z-40 bg-white border rounded-md shadow-lg p-2 w-80 max-h-96 overflow-y-auto">
+            {scenarioOptions.length === 0 && (
+              <div className="text-xs text-slate-400 px-2 py-1">No scenarios available</div>
+            )}
+            {scenarioOptions.map((s) => {
+              const isOn = assigned.includes(s.id);
+              const level = userDifficulty(user, s.id);
+              return (
+                <div
+                  key={s.id}
+                  className={`px-2 py-1.5 rounded ${isOn ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                >
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isOn}
+                      onChange={() => toggle(s.id)}
+                      disabled={busy}
+                      className="mt-0.5 h-3.5 w-3.5 accent-emerald-600"
+                    />
+                    <span className="text-xs text-slate-700 flex-1">{s.title}</span>
+                  </label>
+                  {isOn && onSetDifficulty && (
+                    <div className="mt-1.5 ml-6 inline-flex items-center gap-0.5 bg-white border rounded text-[10px] font-bold uppercase">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onSetDifficulty(s.id, 'normal');
+                        }}
+                        className={`px-2 py-0.5 rounded-l ${
+                          level === 'normal'
+                            ? 'bg-emerald-600 text-white'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                        title="Leaders capitulate when concerns are answered (recommended)"
+                      >
+                        Normal
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onSetDifficulty(s.id, 'hard');
+                        }}
+                        className={`px-2 py-0.5 rounded-r ${
+                          level === 'hard'
+                            ? 'bg-rose-600 text-white'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                        title="Leaders resist indefinitely; original behavior"
+                      >
+                        Hard
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {assigned.length > 0 && (
+              <div className="border-t mt-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => onAssign([])}
+                  disabled={busy}
+                  className="w-full text-left text-xs text-rose-700 hover:bg-rose-50 rounded px-2 py-1.5"
+                >
+                  Clear all assignments
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function UserMeta({ user, scenarioOptions = [] }) {
+  const assigned = userAssignedIds(user);
+  const titles = assigned
+    .map((id) => scenarioOptions.find((s) => s.id === id)?.title)
+    .filter(Boolean);
   return (
     <div className="min-w-0 flex items-center gap-3">
       <div className="flex-shrink-0 h-9 w-9 rounded-full bg-slate-200 flex items-center justify-center">
@@ -257,6 +423,14 @@ function UserMeta({ user }) {
           <span className="font-bold text-slate-900 text-sm">
             {user.rank} {user.lastName}
           </span>
+          {titles.map((title) => (
+            <span
+              key={title}
+              className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold uppercase truncate max-w-xs"
+            >
+              {title}
+            </span>
+          ))}
           {user.role === 'admin' && (
             <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1">
               <Shield className="h-2.5 w-2.5" />

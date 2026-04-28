@@ -1,4 +1,136 @@
-import { GEMINI_API_KEY, GEMINI_MODEL } from '../config/constants';
+import { GEMINI_API_KEY, GEMINI_API_KEYS, modelRotation } from '../config/constants';
+
+/**
+ * In-memory map of (apiKey:model) pairs currently rate-limited and the
+ * timestamp at which they should be available again. Each (key, model) pair
+ * is tracked independently because each Google account has its own quota
+ * bucket per model. Survives across calls within the same browser tab.
+ */
+const _rateLimitedUntil = new Map(); // "key:model" -> ms timestamp
+
+const limitKey = (apiKey, model) => `${apiKey.slice(0, 8)}:${model}`;
+
+/**
+ * Parse the "retry in X seconds" hint from Gemini's 429 error body and
+ * fall back to a sane default if it isn't present.
+ */
+function parseRetryAfterMs(errMsg) {
+  if (!errMsg) return 30_000;
+  const m = errMsg.match(/retry in (\d+(?:\.\d+)?)\s*s/i);
+  if (m) return Math.ceil(parseFloat(m[1]) * 1000) + 500; // small buffer
+  // Default: assume the per-minute window
+  return 60_000;
+}
+
+/**
+ * Make a single Gemini call with model fallback. Iterates the rotation list,
+ * skipping any model whose rate-limit window has not yet expired. On 429,
+ * marks the offending model and tries the next one. Throws only if every
+ * model is exhausted and the soonest-available is more than a minute away.
+ */
+async function callGeminiWithFallback(body, { prefer } = {}) {
+  if (!GEMINI_API_KEYS.length) {
+    throw new Error('No Gemini API key configured.');
+  }
+
+  // Build the candidate list: optional preferred model first, then the
+  // standard rotation, deduplicated.
+  const rotation = modelRotation();
+  const models = prefer ? [prefer, ...rotation.filter((m) => m !== prefer)] : rotation;
+
+  // Iterate every (key, model) pair. Each pair has its own quota bucket on
+  // Google's side, so this is the real lever for free-tier capacity.
+  const candidates = [];
+  for (const model of models) {
+    for (const apiKey of GEMINI_API_KEYS) {
+      candidates.push({ apiKey, model });
+    }
+  }
+
+  const errors = [];
+  const now = () => Date.now();
+
+  for (const { apiKey, model } of candidates) {
+    const lk = limitKey(apiKey, model);
+    const blockedUntil = _rateLimitedUntil.get(lk) || 0;
+    if (blockedUntil > now()) continue;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    // Per-request timeout so a single hung request can't stall the rotation.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25_000);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        return { data: await res.json(), model, apiKey };
+      }
+
+      const errData = await res.json().catch(() => null);
+      const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+
+      if (res.status === 429 || /quota|rate/i.test(errMsg)) {
+        const retryMs = parseRetryAfterMs(errMsg);
+        _rateLimitedUntil.set(lk, now() + retryMs);
+        // eslint-disable-next-line no-console
+        console.warn(`[gemini] ${lk} rate-limited, retry in ${retryMs}ms; trying next pair`);
+        errors.push({ pair: lk, status: res.status, errMsg });
+        continue;
+      }
+
+      if (res.status === 404) {
+        errors.push({ pair: lk, status: 404, errMsg });
+        continue;
+      }
+
+      // eslint-disable-next-line no-console
+      console.warn(`[gemini] ${lk} error ${res.status}: ${errMsg}`);
+      errors.push({ pair: lk, status: res.status, errMsg });
+      continue;
+    } catch (networkErr) {
+      clearTimeout(timer);
+      // eslint-disable-next-line no-console
+      console.warn(`[gemini] ${lk} network error: ${networkErr.message}`);
+      errors.push({ pair: lk, status: 'network', errMsg: networkErr.message });
+      continue;
+    }
+  }
+
+  // Every candidate failed. If something will recover soon, wait for it.
+  const soonest = Math.min(
+    ...Array.from(_rateLimitedUntil.values()).filter((t) => t > now()),
+  );
+  if (Number.isFinite(soonest) && soonest - now() < 60_000) {
+    const wait = Math.max(soonest - now(), 0) + 250;
+    await new Promise((r) => setTimeout(r, wait));
+    for (const { apiKey, model } of candidates) {
+      const lk = limitKey(apiKey, model);
+      if ((_rateLimitedUntil.get(lk) || 0) > now()) continue;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) return { data: await res.json(), model, apiKey };
+      } catch (_) {}
+    }
+  }
+
+  const detail = errors
+    .map((e) => `${e.pair}: ${e.status} ${(e.errMsg || '').slice(0, 80)}`)
+    .join(' | ');
+  throw new Error(`All Gemini key/model pairs exhausted. ${detail}`);
+}
 
 /**
  * Call the Gemini generative-language API with conversation history.
@@ -9,8 +141,70 @@ import { GEMINI_API_KEY, GEMINI_MODEL } from '../config/constants';
  * @param {string}   studentRank     e.g. "MAJ"
  * @param {string}   studentName     e.g. "Smith"
  * @param {Object}   [lesson]        Optional lesson record for context injection.
+ * @param {Object}   [options]       { mode: 'intake' | 'briefback' } for leaders.
  * @returns {Promise<string>}        The model's reply text.
  */
+/**
+ * Diagnostic: ping every model in the rotation with a one-token prompt
+ * and report status (ok / 404 / 429 / 403 / network / etc.) per model.
+ *
+ * Useful for verifying which fallbacks your API key actually has access to,
+ * and for spot-checking quota state before a class session.
+ */
+export async function testModelRotation() {
+  if (!GEMINI_API_KEYS.length) {
+    return [{ model: '(no key)', keyIndex: -1, status: 'error', detail: 'No VITE_GEMINI_API_KEY(S) set' }];
+  }
+  const models = modelRotation();
+  const tinyBody = {
+    contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+    generationConfig: { maxOutputTokens: 1, temperature: 0 },
+  };
+
+  const pairs = [];
+  for (const model of models) {
+    for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
+      pairs.push({ apiKey: GEMINI_API_KEYS[i], keyIndex: i + 1, model });
+    }
+  }
+
+  const results = await Promise.all(
+    pairs.map(async ({ apiKey, keyIndex, model }) => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 12_000);
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(tinyBody),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          return { model, keyIndex, status: 'ok', detail: 'available' };
+        }
+        const errData = await res.json().catch(() => null);
+        const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+        if (res.status === 429 || /quota|rate/i.test(errMsg)) {
+          return { model, keyIndex, status: 'rate-limited', detail: errMsg };
+        }
+        if (res.status === 404) {
+          return { model, keyIndex, status: 'not-found', detail: 'model not available on this key' };
+        }
+        if (res.status === 403) {
+          return { model, keyIndex, status: 'forbidden', detail: errMsg };
+        }
+        return { model, keyIndex, status: 'error', detail: `HTTP ${res.status}: ${errMsg}` };
+      } catch (err) {
+        clearTimeout(timer);
+        return { model, keyIndex, status: 'network', detail: err.message };
+      }
+    }),
+  );
+  return results;
+}
+
 export async function generateAIResponse(
   userMessage,
   currentMessages,
@@ -18,66 +212,72 @@ export async function generateAIResponse(
   studentRank,
   studentName,
   lesson,
+  options = {},
 ) {
   if (!GEMINI_API_KEY) {
     return '[No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env.local file.]';
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
   // Count how many user turns have occurred (to gauge whether we're ready to resolve).
   const userTurns = currentMessages.filter((m) => m.role === 'user').length;
-  const minTurns = Number(agent.minTurns) || 10;
+  const minTurns = Number(agent.minTurns) || 6;
   const turnsRemaining = Math.max(0, minTurns - userTurns);
 
+  // Briefback mode kicks in only when the leader is engaged after the
+  // subordinate phase. Drives a small directive override.
+  const briefback =
+    agent.role === 'leader' &&
+    options.mode === 'briefback' &&
+    agent.conversationGuide?.briefback;
+  const directive = briefback
+    ? agent.conversationGuide?.briefback?.behavior || agent.directive
+    : agent.directive;
+
+  // Compact lesson block: title + aiContext only. The persona's directive
+  // already encodes the archetype-specific behavior, so we don't need to
+  // restate the full lesson description here.
   const lessonBlock = lesson
-    ? `\n=== LESSON CONTEXT ===
-Lesson: ${lesson.title || ''}
-${lesson.description ? `Overview: ${lesson.description}\n` : ''}${lesson.objectives ? `Learning objectives:\n${lesson.objectives}\n` : ''}${lesson.aiContext ? `Additional instructor context for AI:\n${lesson.aiContext}\n` : ''}
-Use this context to stay anchored in the lesson's purpose. Your persona, pushback,
-and the substance of what you probe should all serve the lesson's objectives.`
+    ? `Scenario: ${lesson.title || ''}${lesson.aiContext ? ` — ${lesson.aiContext}` : ''}`
     : '';
 
-  const systemPrompt = `You are participating in a leadership simulation for A731 at CGSC Fort Leavenworth.
-You MUST completely adopt the following persona and NEVER break character.
+  // Subordinate-opening discipline: short and to the point. Avoids the
+  // bloated multi-paragraph version that was driving tokens up.
+  const subordinateRule =
+    agent.role === 'subordinate'
+      ? `Important: do NOT volunteer your archetype's preferred recommendation on turn 1. Acknowledge the student, ask what they need, and only reveal your disposition after they explicitly ask for your read or opinion.`
+      : '';
+
+  // Leader resolution rule: leaders must COMMIT to a path once the student
+  // has substantively answered their concerns. Without this, the model loops
+  // forever inventing new objections. SKIPPED in 'hard' mode so the leader
+  // resists indefinitely (the original behavior, useful for advanced students).
+  const isHard = options.difficulty === 'hard';
+  const leaderRule =
+    agent.role === 'leader' && !isHard
+      ? `Important: by turn ${minTurns + 1} at the latest, you MUST commit to a path. If the student has answered your major concerns (funding, risk, timeline, alternatives), accept their plan and stop pushing back. If they refuse without offering a real alternative, get cold and dismiss them. Do not invent new objections in an endless loop. Reasonable senior leaders commit and move on.`
+      : agent.role === 'leader' && isHard
+      ? `Hard mode: this is an advanced student. Be relentless. Keep finding new angles to push back on. Do not capitulate easily even after the student answers your concerns; hold the line and force them to truly earn the resolution. Only commit if they clearly establish moral authority through repeated, substantive engagement.`
+      : '';
+
+  const briefbackRule = briefback
+    ? `Brief-back mode: the student has spoken with the subordinates and is now briefing their recommendation. Interrogate it briefly, then commit to accepting or rejecting it. Do not loop.`
+    : '';
+
+  const systemPrompt = `You are participating in an ethical decision-making simulation for field-grade officer PME at CGSC. Adopt this persona completely and never break character.
 
 Rank and Name: ${agent.rank} ${agent.name}
-Directive: ${agent.directive}
+Directive: ${directive}
 Backstory: ${agent.backstory}
-${lessonBlock}
+${lessonBlock ? `\n${lessonBlock}` : ''}
 
-The student is ${studentRank} ${studentName}. Address them appropriately.
+The student is ${studentRank} ${studentName}.
+${briefbackRule ? `\n${briefbackRule}` : ''}
+${leaderRule ? `\n${leaderRule}` : ''}
+${subordinateRule ? `\n${subordinateRule}` : ''}
 
-=== CONVERSATION PACING RULES (CRITICAL) ===
-The purpose of this simulation is to give the student practice working through a
-challenging leadership interaction. You MUST keep the conversation going long
-enough for them to actually work through it — this means asking probing
-follow-up questions, pushing back on easy answers, demanding specifics, and
-refusing to accept the first solution that comes along.
+Pacing: target at least ${minTurns} student turns before you resolve. Current turn count: ${userTurns}. Resist easy answers, ask probing follow-ups, push back in character. Don't concede or walk away early.
 
-- Target at least ${minTurns} student turns before you resolve or disengage.
-  (Current student turn count: ${userTurns}. Approximate turns remaining before
-  you may resolve: ${turnsRemaining}.)
-- Do NOT concede, agree, walk away, or signal completion until the student has
-  worked through the issue thoroughly. Early in the conversation, EVERY reply
-  must raise at least one new concern, question, or obstacle that keeps the
-  dialogue open.
-- Probe: ask "how specifically?", "what if X happens?", "walk me through the
-  second- and third-order effects", "who else knows?", "what's your timeline?"
-- Push back: introduce complications, raise your rank, invoke sunk costs,
-  reframe the problem, or return to earlier unresolved threads — whichever is
-  in-character for your persona.
-- If the student tries to end early ("thanks, I'll handle it"), do NOT let
-  them exit. Pull them back in with another concern in-character.
-- Only once the student has clearly demonstrated the target leadership
-  behavior (per your persona's win condition) AND has worked through the
-  topic substantively, you may begin to resolve the conversation.
-
-=== STYLE ===
-Keep each reply concise and realistic to a professional military chat
-environment — one short paragraph, rarely more. No lists.
-
-Always stay in character.`;
+Style: one short paragraph per reply. Professional military chat. No bullet lists. Stay in character.`;
 
   // Build history — exclude the synthetic opening-message marker
   const history = currentMessages
@@ -105,40 +305,21 @@ Always stay in character.`;
     history.push({ role: 'user', parts: [{ text: userMessage }] });
   }
 
-  let retries = 3;
-  let delay = 1000;
-
-  while (retries > 0) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: history,
-        }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        const errMsg = errData?.error?.message || `HTTP ${res.status}`;
-        if (res.status === 400 || res.status === 403 || res.status === 404) {
-          return `[API Error: ${errMsg}]`;
-        }
-        throw new Error(errMsg);
-      }
-
-      const data = await res.json();
-      return (
-        data.candidates?.[0]?.content?.parts?.[0]?.text ||
-        'No response generated.'
-      );
-    } catch (err) {
-      retries--;
-      if (retries === 0) return `[Connection error: ${err.message}]`;
-      await new Promise((r) => setTimeout(r, delay));
-      delay *= 2;
+  try {
+    const { data, model } = await callGeminiWithFallback({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: history,
+    });
+    if (model && model !== modelRotation()[0]) {
+      // eslint-disable-next-line no-console
+      console.info(`[gemini] used fallback model: ${model}`);
     }
+    return (
+      data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      'No response generated.'
+    );
+  } catch (err) {
+    return `[Connection error: ${err.message}]`;
   }
 }
 
@@ -164,8 +345,6 @@ export async function generateGrade({
     throw new Error('No Gemini API key configured.');
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
   const transcript = (messages || [])
     .filter((m) => m.id !== 'opening' || m.text)
     .map((m) => {
@@ -176,28 +355,35 @@ export async function generateGrade({
     })
     .join('\n\n');
 
-  const systemPrompt = `You are an expert Army instructor grading a CGSC leadership simulation.
+  const systemPrompt = `You are an expert military instructor grading an ethical decision-making simulation.
 You will be given:
-  1. A transcript of a student's simulated conversation with an AI persona.
-  2. A short summary paper the student wrote about that conversation.
-  3. A rubric from the instructor.
+  1. The full transcript history for one scenario (one or more conversations the student had with the
+     leader and four subordinate archetypes).
+  2. A short summary / recommendation paper the student wrote.
+  3. A rubric from the instructor (may be implicit if no rubric is provided).
+  4. Scenario context including the four decision-tree paths and their severity.
 
 Do the following and return ONLY a single valid JSON object with these keys:
 
-  "summary":       2-4 sentence neutral summary of the conversation.
-  "comparison":    3-5 sentence analysis of how accurately the student's paper
-                   reflects what actually happened in the conversation — call
-                   out any omissions, exaggerations, or misrepresentations.
-  "criteria":      an array of rubric items. For each item in the rubric,
-                   output { "name": "...", "description": "...",
-                            "maxScore": <number>, "score": <number>,
-                            "rationale": "1-2 sentences explaining the score" }.
-                   If the rubric does not specify point scales, assume 5 points
-                   per item. Extract 3-7 discrete criteria from the rubric text.
+  "summary":       2-4 sentence neutral summary of the conversation across all personas.
+  "comparison":    3-5 sentence analysis of how accurately the student's paper reflects the
+                   conversations. Call out omissions or misrepresentations.
+  "pathLabel":     One of "Path A" / "Path B" / "Path C" / "Path D" — which decision-tree path
+                   does the student's actual behavior most closely match?
+  "severity":      One of "Catastrophic" / "Severe" / "Suboptimal" / "Acceptable" / "Optimal".
+                   Use the scenario context to pick the closest severity for the chosen path.
+  "pathConfidence": 0.0 to 1.0 — how confident are you in the path mapping?
+  "pathNarrative": 3-5 sentence explanation of why this path was chosen, what the student did
+                   well, and what they missed.
+  "criteria":      an array of rubric items. For each item in the rubric (or, if no rubric was
+                   provided, four standard ethical-decision-making criteria: Moral Courage,
+                   Followership Selection, Recommendation Framing, Career Stewardship),
+                   output { "name": "...", "description": "...", "maxScore": <number>,
+                            "score": <number>, "rationale": "1-2 sentences explaining the score" }.
+                   Default to 5 points per item.
   "totalScore":    sum of "score" across criteria.
   "maxTotal":      sum of "maxScore" across criteria.
-  "overallComments": 3-5 sentence holistic evaluation tying the conversation,
-                   paper, and rubric together.
+  "overallComments": 3-5 sentence holistic evaluation tying the conversations, paper, and outcome together.
 
 Output strictly valid JSON — no markdown code fences, no commentary.`;
 
@@ -220,24 +406,14 @@ ${transcript || '(no transcript)'}
 =========== STUDENT PAPER ===========
 ${paperText || '(no paper submitted)'}`;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.3,
-      },
-    }),
+  const { data } = await callGeminiWithFallback({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.3,
+    },
   });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => null);
-    throw new Error(errData?.error?.message || `HTTP ${res.status}`);
-  }
-  const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
   try {
     return JSON.parse(text);

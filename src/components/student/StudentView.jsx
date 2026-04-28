@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ArrowLeft, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 import Header from '../Header';
 import AgentRoster from './AgentRoster';
@@ -11,6 +11,7 @@ export default function StudentView({
   lessonKey,
   lesson,
   lessonTitle,
+  transcripts,
   onExit,
   onBackToDashboard,
 }) {
@@ -20,6 +21,45 @@ export default function StudentView({
     (a) =>
       a.active !== false && (a.lessonId || 'lesson1') === lessonKey,
   );
+
+  // ── Compute stage gating from existing transcripts ─────────────────────────
+  // Stage 2 unlocks once the leader has at least one student turn.
+  // Stage 3 unlocks after 3+ of the 4 subordinates have at least one student turn.
+  const stageLocks = useMemo(() => {
+    const myTranscripts = (transcripts || []).filter(
+      (t) =>
+        (t.userId === profile?.uid || t.userId === profile?.id) &&
+        t.lessonId === lessonKey,
+    );
+    const turnCount = (transcript) =>
+      (transcript?.messages || []).filter((m) => m.role === 'user').length;
+
+    const leader = activeAgents.find((a) => a.role === 'leader');
+    const leaderTranscript =
+      leader && myTranscripts.find((t) => t.agentId === leader.id);
+    const stage2Unlocked = leaderTranscript ? turnCount(leaderTranscript) >= 1 : false;
+
+    const subordinates = activeAgents.filter((a) => a.role !== 'leader');
+    const subordinateTurnCounts = subordinates.map((s) => {
+      const t = myTranscripts.find((tx) => tx.agentId === s.id);
+      return turnCount(t);
+    });
+    const subordinatesEngaged = subordinateTurnCounts.filter((n) => n >= 1).length;
+    // Stage 3 unlocks once enough peers/subordinates have been engaged. With
+    // 4 peers we use 3-of-4 (give the student some flexibility); with 3 peers
+    // we require all 3.
+    const totalSubordinates = subordinates.length;
+    const requiredEngagement = totalSubordinates >= 4 ? 3 : totalSubordinates;
+    const stage3Unlocked = subordinatesEngaged >= requiredEngagement;
+
+    return {
+      stage2Unlocked,
+      stage3Unlocked,
+      subordinatesEngaged,
+      totalSubordinates,
+      requiredEngagement,
+    };
+  }, [activeAgents, transcripts, profile, lessonKey]);
 
   const hasBriefing =
     lesson &&
@@ -94,6 +134,7 @@ export default function StudentView({
           agents={activeAgents}
           selectedAgent={chat.selectedAgent}
           onSelect={chat.selectAgent}
+          stageLocks={stageLocks}
         />
         <div className="flex-grow flex flex-col overflow-hidden">
           <ChatPanel

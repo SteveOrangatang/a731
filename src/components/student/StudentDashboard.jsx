@@ -9,6 +9,8 @@ import {
   User,
   ChevronRight,
   Shield,
+  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react';
 import Header from '../Header';
 import PaperSubmission from './PaperSubmission';
@@ -38,13 +40,33 @@ export default function StudentDashboard({
   onSignOut,
   onSubmitPaper,
   onDeleteTranscript,
+  onResetScenario,
   onEnterAdmin,
 }) {
   const [paperLesson, setPaperLesson] = useState(null);
   const [viewingTranscript, setViewingTranscript] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(null); // { lessonKey, lessonTitle, transcriptCount, hasSubmission }
+  const [resetting, setResetting] = useState(false);
+  const [resetStatus, setResetStatus] = useState('');
 
-  const keys = lessonKeys(lessons);
-  const fallbackLessonId = keys[0] || 'lesson1';
+  const allKeys = lessonKeys(lessons);
+  const fallbackLessonId = allKeys[0] || 'lesson1';
+
+  // Filter lessons by the scenarios the instructor assigned to this student.
+  // Admins see all five scenarios so they can run through any of them.
+  // Approved students with one or more assignments see only those scenarios.
+  // Students with no assignment see nothing and an "awaiting assignment" note.
+  const isAdmin = profile.role === 'admin';
+  const assignedIds = Array.isArray(profile.assignedScenarioIds)
+    ? profile.assignedScenarioIds.filter(Boolean)
+    : profile.assignedScenarioId
+    ? [profile.assignedScenarioId]
+    : [];
+  const keys = isAdmin
+    ? allKeys
+    : assignedIds.length > 0
+    ? allKeys.filter((k) => assignedIds.includes(k))
+    : [];
 
   // Lookup: transcripts belonging to current student
   const myTranscripts = transcripts.filter(
@@ -87,6 +109,20 @@ export default function StudentDashboard({
             </button>
           </div>
         </div>
+
+        {!isAdmin && assignedIds.length === 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-6">
+            <h3 className="font-bold text-amber-900 text-base flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Awaiting scenario assignment
+            </h3>
+            <p className="text-sm text-amber-800 mt-1 leading-relaxed">
+              Your instructor has not yet assigned you to a scenario. Once they do, you will see
+              your scenario card below with the leader, subordinates, and recommendation
+              workflow. Check back shortly.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {keys.map((key) => {
@@ -196,6 +232,24 @@ export default function StudentDashboard({
                       </span>
                       <ChevronRight className="h-4 w-4" />
                     </button>
+                    {onResetScenario &&
+                      (lessonTranscripts.length > 0 || submission) && (
+                        <button
+                          onClick={() =>
+                            setConfirmReset({
+                              lessonKey: key,
+                              lessonTitle: lesson.title || key,
+                              transcriptCount: lessonTranscripts.length,
+                              hasSubmission: !!submission,
+                            })
+                          }
+                          className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-rose-700 px-3 py-1.5 rounded-md hover:bg-rose-50 transition-colors"
+                          title="Delete all conversations and the paper for this scenario so you can start over"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Reset scenario
+                        </button>
+                      )}
                   </div>
 
                   {/* Past chats list */}
@@ -241,6 +295,20 @@ export default function StudentDashboard({
                           {submission.grade.maxTotal}
                         </span>
                       </div>
+                      {(submission.grade.severity || submission.grade.pathLabel) && (
+                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                          {submission.grade.severity && (
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white border border-amber-300">
+                              Outcome: {submission.grade.severity}
+                            </span>
+                          )}
+                          {submission.grade.pathLabel && (
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-700">
+                              {submission.grade.pathLabel}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {submission.grade.overallComments && (
                         <p className="mt-1 text-slate-700 line-clamp-3">
                           {submission.grade.overallComments}
@@ -279,6 +347,83 @@ export default function StudentDashboard({
             if (onDeleteTranscript) await onDeleteTranscript(id);
           }}
         />
+      )}
+
+      {confirmReset && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-rose-50 rounded-full">
+                <AlertTriangle className="h-5 w-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Reset this scenario?</h3>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  <span className="font-semibold">{confirmReset.lessonTitle}</span>
+                </p>
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  This will permanently delete{' '}
+                  {confirmReset.transcriptCount > 0 && (
+                    <>
+                      <span className="font-semibold">
+                        {confirmReset.transcriptCount} conversation
+                        {confirmReset.transcriptCount === 1 ? '' : 's'}
+                      </span>
+                      {confirmReset.hasSubmission ? ' and ' : ' '}
+                    </>
+                  )}
+                  {confirmReset.hasSubmission && (
+                    <span className="font-semibold">
+                      your submitted paper{' '}
+                      {confirmReset.transcriptCount > 0 ? '' : ''}
+                    </span>
+                  )}{' '}
+                  for this scenario. You will start fresh from the leader
+                  briefing. This cannot be undone.
+                </p>
+              </div>
+            </div>
+            {resetStatus && (
+              <p className="text-xs text-rose-700 px-3 py-2 bg-rose-50 rounded">
+                {resetStatus}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setConfirmReset(null);
+                  setResetStatus('');
+                }}
+                disabled={resetting}
+                className="px-4 py-2 border rounded text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={resetting}
+                onClick={async () => {
+                  setResetting(true);
+                  setResetStatus('');
+                  try {
+                    await onResetScenario(
+                      profile.uid || profile.id,
+                      confirmReset.lessonKey,
+                    );
+                    setConfirmReset(null);
+                  } catch (err) {
+                    setResetStatus('Reset failed: ' + (err.message || 'unknown error'));
+                  } finally {
+                    setResetting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-rose-600 text-white rounded text-sm font-semibold hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {resetting ? 'Resetting…' : 'Reset scenario'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -13,6 +13,19 @@ import {
 import { generateGrade } from '../../utils/gemini';
 import { downloadGradeReport } from '../../utils/gradeReport';
 
+function severityClass(severity) {
+  if (!severity) return 'bg-slate-100 text-slate-700';
+  const s = severity.toLowerCase();
+  if (s.includes('catastrophic')) return 'bg-red-100 text-red-800 border border-red-300';
+  if (s.includes('severe')) return 'bg-rose-100 text-rose-800 border border-rose-300';
+  if (s.includes('mission failure')) return 'bg-orange-100 text-orange-800 border border-orange-300';
+  if (s.includes('suboptimal') || s.includes('sub-optimal') || s.includes('conditional'))
+    return 'bg-amber-100 text-amber-800 border border-amber-300';
+  if (s.includes('acceptable')) return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+  if (s.includes('optimal')) return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
+  return 'bg-slate-100 text-slate-700';
+}
+
 export default function SubmissionsTab({
   submissions,
   transcripts,
@@ -111,11 +124,15 @@ export default function SubmissionsTab({
       };
       await onUpsertSubmission(updated);
 
-      // Trigger Word download
+      // Trigger Word download — pass per-persona conversations so the export
+      // groups each chat under its own heading instead of a flat dump.
       await downloadGradeReport({
         grade,
         studentMeta,
-        messages: allMessages,
+        conversations: studentChats.map((t) => ({
+          agentName: t.agentName,
+          messages: t.messages || [],
+        })),
         paperText: row.paperText || '',
       });
     } catch (err) {
@@ -301,14 +318,13 @@ export default function SubmissionsTab({
                               email: row.studentEmail,
                               lessonTitle,
                             };
-                            const msgs = studentChats.flatMap((t, i) => [
-                              { role: 'agent', text: `\n--- Conversation ${i + 1}: ${t.agentName} ---`, id: `d-${i}` },
-                              ...(t.messages || []).filter((m) => m.id !== 'opening' || m.text),
-                            ]);
                             await downloadGradeReport({
                               grade: row.grade,
                               studentMeta,
-                              messages: msgs,
+                              conversations: studentChats.map((t) => ({
+                                agentName: t.agentName,
+                                messages: t.messages || [],
+                              })),
                               paperText: row.paperText || '',
                             });
                           }}
@@ -319,6 +335,32 @@ export default function SubmissionsTab({
                         </button>
                       </header>
                       <div className="p-4 text-sm space-y-3">
+                        {(row.grade.severity || row.grade.pathLabel) && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {row.grade.severity && (
+                              <span
+                                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${severityClass(
+                                  row.grade.severity,
+                                )}`}
+                              >
+                                Outcome: {row.grade.severity}
+                              </span>
+                            )}
+                            {row.grade.pathLabel && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                {row.grade.pathLabel}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {row.grade.pathNarrative && (
+                          <div>
+                            <div className="text-[10px] font-bold uppercase text-amber-900">
+                              Path Analysis
+                            </div>
+                            <p className="text-slate-800">{row.grade.pathNarrative}</p>
+                          </div>
+                        )}
                         <div>
                           <div className="text-[10px] font-bold uppercase text-amber-900">Summary</div>
                           <p className="text-slate-800">{row.grade.summary}</p>

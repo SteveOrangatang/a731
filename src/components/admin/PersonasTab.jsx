@@ -6,7 +6,6 @@ import {
   ToggleRight,
   Edit2,
   Trash2,
-  AlertTriangle,
   BookOpen,
 } from 'lucide-react';
 
@@ -40,7 +39,6 @@ function NewAgentForm({ onSave, onCancel, lessons }) {
     winCondition: '',
     initiates: false,
     openingMessage: '',
-    isMoralCourageChallenge: false,
     lessonId: defaultLessonId(lessons),
     minTurns: 10,
   });
@@ -106,6 +104,9 @@ function NewAgentForm({ onSave, onCancel, lessons }) {
                 : <ToggleLeft className="h-6 w-6 text-slate-400" />}
             </button>
             <span className="text-sm font-semibold text-slate-700">Agent initiates the conversation</span>
+            <span className="text-[10px] text-slate-500 italic">
+              (recommended OFF for subordinates so the student must engage them)
+            </span>
           </label>
           {data.initiates && (
             <textarea required placeholder="Opening message — what the agent says first..."
@@ -113,14 +114,6 @@ function NewAgentForm({ onSave, onCancel, lessons }) {
               onChange={(e) => setData({ ...data, openingMessage: e.target.value })}
               className="w-full border p-2 rounded text-sm h-24 outline-none focus:ring-2 focus:ring-emerald-400" />
           )}
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" checked={data.isMoralCourageChallenge}
-              onChange={(e) => setData({ ...data, isMoralCourageChallenge: e.target.checked })}
-              className="w-4 h-4 accent-red-600" />
-            <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-              <AlertTriangle className="h-4 w-4 text-red-500" />Flag as Moral Courage Challenge
-            </span>
-          </label>
         </div>
 
         <button type="submit" className="bg-emerald-700 text-white px-6 py-2 rounded font-bold hover:bg-emerald-800 transition-colors">
@@ -188,6 +181,9 @@ function AgentEditRow({ agent, onSave, onCancel, lessons }) {
               : <ToggleLeft className="h-6 w-6 text-slate-400" />}
           </button>
           <span className="text-sm font-semibold text-slate-700">Agent initiates the conversation</span>
+          <span className="text-[10px] text-slate-500 italic">
+            (off for subordinates; on for leaders delivering the order)
+          </span>
         </label>
         {ed.initiates && (
           <div>
@@ -196,14 +192,6 @@ function AgentEditRow({ agent, onSave, onCancel, lessons }) {
               className="w-full border p-2 rounded text-sm h-24 outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
         )}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" checked={ed.isMoralCourageChallenge || false}
-            onChange={(e) => setEd({ ...ed, isMoralCourageChallenge: e.target.checked })}
-            className="w-4 h-4 accent-red-600" />
-          <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-            <AlertTriangle className="h-4 w-4 text-red-500" />Flag as Moral Courage Challenge
-          </span>
-        </label>
       </div>
 
       <div className="flex justify-end gap-2">
@@ -308,11 +296,6 @@ export default function PersonasTab({
                   {agent.initiates && (
                     <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase">
                       Initiates
-                    </span>
-                  )}
-                  {agent.isMoralCourageChallenge && (
-                    <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold uppercase">
-                      <AlertTriangle className="h-2.5 w-2.5" />MC
                     </span>
                   )}
                   {agent.active === false && (

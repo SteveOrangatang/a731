@@ -22,6 +22,7 @@ export default function App() {
     submissions,
     upsertSubmission,
     deleteTranscript,
+    resetScenarioForUser,
   } = firestoreSync;
 
   // ── Navigation ─────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ export default function App() {
         onSignOut={handleSignOut}
         onSubmitPaper={upsertSubmission}
         onDeleteTranscript={deleteTranscript}
+        onResetScenario={resetScenarioForUser}
         onEnterAdmin={() => setIsAdmin(true)}
       />
     );
@@ -131,6 +133,7 @@ export default function App() {
         lessonKey={activeLessonKey}
         lesson={lessons[activeLessonKey]}
         lessonTitle={lessons[activeLessonKey]?.title || activeLessonKey}
+        transcripts={allTranscripts}
         onExit={handleSignOut}
         onBackToDashboard={() => {
           chat.selectAgent(null);

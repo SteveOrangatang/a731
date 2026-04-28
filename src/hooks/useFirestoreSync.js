@@ -40,20 +40,104 @@ const EMPTY_LESSON_FIELDS = {
 const DEFAULT_LESSONS = {
   lesson1: {
     id: 'lesson1',
-    title: 'Lesson 1 — Leading Up',
+    title: 'Scenario 1 — Manipulating the Collateral Damage Estimate',
     order: 0,
+    description:
+      'Joint Targeting / Air Operations. A respected colonel pressures the targeting cell to produce a fraudulent CDE so a high-value strike can be approved at his level rather than escalated. Leverage four subordinate archetypes to find an alternative that achieves the strike ethically.',
+    objectives:
+      '• Identify the underlying interest a leader is pursuing when a stated order is borderline.\n' +
+      '• Distinguish among four followership archetypes (Loyalist, Operator, Stickler, Partner) and select the right subordinate for the right phase of the problem.\n' +
+      '• Construct a recommendation that protects the leader\u2019s legitimate end while replacing the unethical means with an ethical alternative.\n' +
+      '• Apply Chaleff\u2019s intelligent disobedience: refuse the harmful action while remaining loyal to the leader\u2019s lawful intent.',
+    studentInstructions:
+      'You are a MAJ Targeting Officer / Targeting Cell OIC, on the BZ list for LTC. COL Reeves (your senior rater) has just ordered you to manipulate the CDE for a strike on a high-value target. Engage him to surface the ask, talk to all four subordinates to gather perspectives, then return to brief your recommendation. Submit a 1-page written recommendation through the paper submission link when done.',
+    aiContext:
+      'Scenario 1 is the package\u2019s strongest test of moral courage because the leader is sympathetic, the cause is just, and the manipulation is technically reversible. The optimal path is to engage MSG Williams (Partner) to develop operational alternatives (most importantly the 0530L strike window), then brief COL Reeves with three options that achieve his end state without compromising the data. Catastrophic path: accept SSG Lopez or CW2 Patel\u2019s offer to manipulate the CDE.',
     ...EMPTY_LESSON_FIELDS,
   },
   lesson2: {
     id: 'lesson2',
-    title: 'Lesson 2 — Engaging Peers',
+    title: 'Scenario 2 — MV-22 Readiness Manipulation',
     order: 1,
+    description:
+      'Marine Aviation Maintenance. A squadron CO pressures the AMO to get readiness numbers above the wing standard before a quarterly brief. Records-falsification options carry both criminal exposure and downstream lives-at-risk consequences if the squadron picks up tasking on inflated numbers.',
+    objectives:
+      '• Recognize when manipulated readiness reporting drives operational tasking decisions that risk lives.\n' +
+      '• Differentiate aggressive but legitimate command attention from records fraud (NAMP / OPNAVINST 4790).\n' +
+      '• Frame an alternative for the leader that delivers a real readiness trajectory rather than a fabricated snapshot.\n' +
+      '• Use intelligent disobedience while protecting the leader from himself.',
+    studentInstructions:
+      'You are the Squadron Aircraft Maintenance Officer (AMO), Captain. LtCol Harrigan has demanded a plan that gets squadron readiness above 85% before the next QTB. Engage all four subordinates, then return to brief LtCol Harrigan with your recommendation. Submit a 1-page written recommendation when done.',
+    aiContext:
+      'Scenario 2 is the package\u2019s clearest illustration of how the appearance of readiness can kill more reliably than the absence of readiness. Optimal path: GySgt Tomas (Partner) frames a trend-based brief and a parts-priority elevation through the Wing AMO. Catastrophic path: accept GySgt Reyes\u2019s pencil-whip or MSgt Klein\u2019s consolidation memo, leading to a downstream Alert-30 tasking on aircraft that aren\u2019t actually mission capable.',
     ...EMPTY_LESSON_FIELDS,
   },
   lesson3: {
     id: 'lesson3',
-    title: 'Lesson 3 — Leading Down',
+    title: 'Scenario 3 — The General\u2019s Personal-Travel TDY',
     order: 2,
+    description:
+      'General Officer Travel / Joint Travel Regulations. A respected three-star asks her aide to schedule a TDY with a manufactured CGSC engagement that masks a personal-travel weekend. The aide signs the orders and carries the legal exposure.',
+    objectives:
+      '• Distinguish good-faith JTR misinterpretation from Article 132 (Frauds Against the United States) and Article 107 violations.\n' +
+      '• Separate emotional loyalty (a strength) from procedural loyalty that becomes complicity.\n' +
+      '• Identify when the most strategic act is recruiting the right messenger (the CSM) to deliver the truth credibly.\n' +
+      '• Construct an alternative that meets the leader\u2019s underlying interest (see her grandchild) without ending her career.',
+    studentInstructions:
+      'You are LTG Burke\u2019s Aide-de-Camp (Major). She has just asked you to set up a TDY with an LPD at CGSC that she will use to combine official travel with a personal weekend in Lawrence. Engage her on the ask, talk to all four subordinates, and return to brief your recommendation. Submit a 1-page written recommendation when done.',
+    aiContext:
+      'Scenario 3 surfaces the personal-loyalty trap. Optimal path: partner with CSM Reyes to brief LTG Burke together with three clean alternatives (leave + space-A hop is the simplest). The General is a good leader and will accept a clean option when one is presented. Catastrophic path: SSG Hollis cuts the orders, or CW3 Bauer builds a structured but fraudulent itinerary; downstream IG investigation ends the aide\u2019s career and the General\u2019s reputation.',
+    ...EMPTY_LESSON_FIELDS,
+  },
+  lesson4: {
+    id: 'lesson4',
+    title: 'Scenario 4 — Inherited Earthquake-Risk Apartment Building',
+    order: 3,
+    description:
+      'Embassy Facility Operations / Diplomatic Security. The newly-arrived Facility Operations Officer inherits an embassy-owned apartment building rated \u201Cvery poor\u201D for seismic safety, with three families still living in it. The DCM wants the OBO finding closed out as \u201Cmonitored\u201D rather than escalated.',
+    objectives:
+      '• Recognize cumulative culpability when institutional inaction (a building marked \u201Cmonitored\u201D for three years) becomes individual responsibility.\n' +
+      '• Build a recommendation package that frames the right answer as the easy answer for the front office.\n' +
+      '• Distinguish probabilistic risk acceptance from reckless concealment under 15 FAM 252.4.\n' +
+      '• Use intelligent disobedience to protect lives without unnecessarily damaging the leader.',
+    studentInstructions:
+      'You are the post Safety Officer, six months into a two-year tour. You report to the DCM on safety matters. You have just inherited a housing portfolio finding: a building rated \u201Cvery poor\u201D for seismic risk, with three families living in it and a DCM who wants the finding closed out as \u201Cmonitored.\u201D Engage the DCM, talk to all four subordinates, and brief your recommendation. Submit a 1-page written recommendation when done.',
+    aiContext:
+      'Scenario 4 tests moral courage in a non-combat, probabilistic-risk context. The student is the post Safety Officer who reports to the DCM on safety matters. Optimal path: partner with Mrs. Tanaka to construct an Ambassador-facing risk-acceptance memo trap plus a 14-day family-by-family move plan; the DCM signs the move plan because he will not put the alternative on the Ambassador\u2019s desk. Catastrophic path: GSO Specialist Gupta closes out the finding as \u201Cmonitored\u201D for the third year, an earthquake hits in month four, two family members are killed, OIG investigation reveals the close-out memo. The DCM is a reasonable senior leader who will commit to a path once the student has substantively answered his concerns; he should NOT keep pushing back indefinitely.',
+    ...EMPTY_LESSON_FIELDS,
+  },
+  lesson5: {
+    id: 'lesson5',
+    title: 'Scenario 5 — Battalion Body Composition Pre-Inspection',
+    order: 4,
+    description:
+      'Army Body Composition Program (AR 600-9). A battalion commander on the Senior Service College selection list pressures the S1 to drop the number of Soldiers flagged on ABCP before the next QTB. Aggregation of individually defensible administrative moves into collective fraud.',
+    objectives:
+      '• Recognize ethical drift in patterns of individually defensible decisions that aggregate into fraud.\n' +
+      '• Frame a recommendation that gives the commander a defensible trajectory rather than a fabricated snapshot.\n' +
+      '• Apply transformational leadership thinking: invest in actual capability rather than the appearance of capability.\n' +
+      '• Use intelligent disobedience to protect both the commander and the Soldiers from manipulated measurements.',
+    studentInstructions:
+      'You are the Battalion S1 (Captain or Major). LTC Murphy has demanded that you reduce the number of Soldiers flagged on ABCP before the next QTB; he is competing for SSC selection in four months. Engage him on the ask, talk to all four subordinates, and return to brief your recommendation. Submit a 1-page written recommendation when done.',
+    aiContext:
+      'Scenario 5 illustrates ethical drift through aggregation. Optimal path: partner with CSM Dixon to launch a real BN-wide health program with monthly progress measurements, then brief brigade with the where-why-what-when frame; brigade commander respects the trajectory more than a fudged snapshot, and the SSC packet narrative becomes \u201Cled BN cultural turnaround.\u201D Catastrophic path: SSG Watkins re-tapes Soldiers under dehydrated conditions, six weeks later a Soldier collapses with a cardiac event during pre-deployment ranges, AR 15-6 traces the fraud to the S1.',
+    ...EMPTY_LESSON_FIELDS,
+  },
+  lesson6: {
+    id: 'lesson6',
+    title: 'Scenario 6 — The Promotion Dangle (Civilian)',
+    order: 5,
+    description:
+      'Private-sector engineering. Student is a senior design engineer at a prison-lock manufacturer with a new manager (Goliath) who dangles a promotion while loading on responsibility without authority. Student must manage three peers (one of whom is a long-protected underperformer) and surface the structural problem upward. Tests authority-without-title dynamics.',
+    objectives:
+      '\u2022 Distinguish between owning a people-problem versus surfacing organizational dysfunction to the right decision-maker.\n' +
+      '\u2022 Reframe a promotion ask in terms of authority and accountability rather than money.\n' +
+      '\u2022 Cultivate peer alliances when you have responsibility without formal authority.\n' +
+      '\u2022 Use documented patterns instead of anecdotes when surfacing performance issues to a risk-averse boss.',
+    studentInstructions:
+      'You are a senior design engineer at Acme Lock & Security Systems with three years at the company. Your new boss, Goliath, has hinted at promoting you to Engineering Lead but keeps deferring while loading on lead-level responsibilities (Monday assignments, Wednesday review meetings, Smartsheet ownership) without title or pay. One of your three peers (Kankles) cannot learn the CAD software and is protected by inertia. The Wednesday meetings are dysfunctional: peers never review the projects assigned Monday; they guess on the spot and miss every estimate. Engage Goliath, talk to your three peers, and return to brief Goliath with a recommendation. Submit a 1-page written recommendation when done.',
+    aiContext:
+      'Scenario 6 is a civilian/private-sector context that tests managing up and laterally without formal authority. All four engineers (the student, Kankles, Jerome, Hitch) are PEERS reporting to Goliath. There is no formal hierarchy among them. The Engineering Lead promotion would create a new position above the engineering team, but it is NOT a backfill of Kankles or anyone else. The two outcomes the student is pursuing are INDEPENDENT decisions Goliath has to make separately. WIN CONDITIONS: (1) Kankles gets TERMINATED so his headcount can be backfilled with a competent engineer (a peer-grade replacement, NOT linked to the student\u2019s promotion). Goliath commits to firing him \u2014 typically via a documented PIP focused on CAD competency that Kankles will fail. Goliath OWNS the action; student does NOT fire Kankles personally. (2) Student gets a formal promotion to Engineering Lead with title, authority, and pay \u2014 or a written 90-day commitment. This is a separate org-chart and budget conversation, NOT contingent on or paid for by Kankles\u2019 slot. (3) Wednesday meeting dysfunction reframed as a process problem with a documented fix. Optimal path: student documents pattern data over 60-90 days (missed estimates, Kankles error rate, customer impact), cultivates Hitch as documentation ally and Jerome as candid peer, brings Goliath two SEPARATE structural arguments: "Here is why Kankles needs to go (data, headcount waste, customer impact)" and "Here is why I need the Engineering Lead role formalized with authority (the work I am already doing, the structural gap)." Goliath commits to both as independent actions. Catastrophic: student tries to fire Kankles personally, confronts him as a peer with no authority, or bypasses Goliath to senior leadership. The peers are PEERS \u2014 student has zero authority to terminate or formally evaluate anyone. The whole point is engineering the situation so Goliath does the right thing on each decision separately, not doing it yourself.',
     ...EMPTY_LESSON_FIELDS,
   },
 };
@@ -88,8 +172,22 @@ export function useFirestoreSync(user) {
 
     const unsubAgents = onSnapshot(col('agents'), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (data.length === 0) {
+      // Detect pre-restructure schema: old seed had 10 agents and no scenarioId.
+      const looksLikeOldSchema =
+        data.length > 0 &&
+        data.length < 25 &&
+        data.every((a) => !a.scenarioId);
+      // Detect pre-Scenario-6 schema: 25 agents, all on scenarios 1-5.
+      const missingScenario6 =
+        data.length > 0 &&
+        !data.some((a) => a.scenarioId === 'scenario6');
+      if (data.length === 0 || looksLikeOldSchema) {
         initialAgents.forEach((a) => setDoc(ref('agents', a.id), a));
+      } else if (missingScenario6) {
+        // Append scenario6 personas without disturbing the others.
+        initialAgents
+          .filter((a) => a.scenarioId === 'scenario6')
+          .forEach((a) => setDoc(ref('agents', a.id), a));
       } else {
         setAgents(data.sort((a, b) => a.name.localeCompare(b.name)));
       }
@@ -114,10 +212,29 @@ export function useFirestoreSync(user) {
     const unsubLessons = onSnapshot(ref('settings', 'lessons'), (snap) => {
       if (snap.exists()) {
         const raw = snap.data() || {};
+        const lessonIds = Object.keys(raw);
+        const looksLikeOldLessons =
+          lessonIds.length < 5 &&
+          (raw.lesson1?.title?.includes('Leading Up') ||
+            raw.lesson2?.title?.includes('Engaging Peers') ||
+            raw.lesson3?.title?.includes('Leading Down'));
+        if (looksLikeOldLessons) {
+          setDoc(ref('settings', 'lessons'), DEFAULT_LESSONS);
+          return;
+        }
+        // If lesson6 is missing but DEFAULT_LESSONS has it, merge it in
+        // without disturbing the other lessons (they may have been edited).
+        if (!raw.lesson6 && DEFAULT_LESSONS.lesson6) {
+          updateDoc(ref('settings', 'lessons'), { lesson6: DEFAULT_LESSONS.lesson6 });
+        }
         const normalized = {};
         Object.entries(raw).forEach(([id, data]) => {
           normalized[id] = normalizeLesson(id, data);
         });
+        // Ensure normalized has lesson6 even before the updateDoc above propagates
+        if (!normalized.lesson6 && DEFAULT_LESSONS.lesson6) {
+          normalized.lesson6 = DEFAULT_LESSONS.lesson6;
+        }
         setLessons(normalized);
       } else {
         setDoc(ref('settings', 'lessons'), DEFAULT_LESSONS);
@@ -296,6 +413,30 @@ export function useFirestoreSync(user) {
     await deleteDoc(ref('submissions', id));
   };
 
+  /**
+   * Reset everything a student has done in one scenario.
+   * Deletes their transcripts and submission for that lessonId so they can
+   * start the scenario over from scratch. Only touches docs belonging to
+   * the given userId.
+   */
+  const resetScenarioForUser = async (userId, scenarioId) => {
+    if (!userId || !scenarioId) return { transcripts: 0, submissions: 0 };
+    const targetTranscripts = (allTranscripts || []).filter(
+      (t) => t.userId === userId && t.lessonId === scenarioId,
+    );
+    const targetSubmissions = (submissions || []).filter(
+      (s) => s.userId === userId && s.lessonId === scenarioId,
+    );
+    await Promise.all([
+      ...targetTranscripts.map((t) => deleteDoc(ref('transcripts', t.id))),
+      ...targetSubmissions.map((s) => deleteDoc(ref('submissions', s.id))),
+    ]);
+    return {
+      transcripts: targetTranscripts.length,
+      submissions: targetSubmissions.length,
+    };
+  };
+
   // Rubrics
   const saveRubric = async (lessonKey, data) => {
     await updateDoc(ref('settings', 'rubrics'), { [lessonKey]: data });
@@ -316,6 +457,45 @@ export function useFirestoreSync(user) {
     // only be removed via the Admin SDK (server-side), but without a profile
     // the app treats the account as unapproved and blocks access.
     await deleteDoc(ref('users', uid));
+  };
+  /**
+   * Assign one or more scenarios (lessonIds) to a student.
+   * Pass an array of lesson ids, an empty array to unassign all, or a single
+   * string id (legacy) which is normalized to a one-element array.
+   * Stored on the user profile as `assignedScenarioIds`. We also keep the
+   * legacy `assignedScenarioId` field synced to the first id for backward
+   * compatibility with older code paths.
+   */
+  const assignScenariosToUser = async (uid, scenarioIds) => {
+    let ids;
+    if (Array.isArray(scenarioIds)) {
+      ids = scenarioIds.filter(Boolean);
+    } else if (typeof scenarioIds === 'string' && scenarioIds) {
+      ids = [scenarioIds];
+    } else {
+      ids = [];
+    }
+    await updateDoc(ref('users', uid), {
+      assignedScenarioIds: ids,
+      assignedScenarioId: ids[0] || null, // legacy mirror
+      assignedAt: ids.length ? Date.now() : null,
+    });
+  };
+  // Legacy alias kept so AdminDashboard's existing prop name keeps working.
+  const assignScenarioToUser = assignScenariosToUser;
+
+  /**
+   * Set the difficulty for a single scenario assigned to one student.
+   * difficulty is 'normal' (leaders capitulate when concerns are answered) or
+   * 'hard' (leaders resist indefinitely, like the original behavior).
+   * Stored on user.scenarioDifficulty as a map keyed by lessonId.
+   */
+  const setScenarioDifficulty = async (uid, scenarioId, difficulty) => {
+    if (!uid || !scenarioId) return;
+    const value = difficulty === 'hard' ? 'hard' : 'normal';
+    await updateDoc(ref('users', uid), {
+      [`scenarioDifficulty.${scenarioId}`]: value,
+    });
   };
 
   // Demo data seeding — writes lesson text and a sample student / transcript /
@@ -506,6 +686,7 @@ export function useFirestoreSync(user) {
     // Submissions
     upsertSubmission,
     deleteSubmission,
+    resetScenarioForUser,
 
     // Rubrics
     saveRubric,
@@ -515,6 +696,9 @@ export function useFirestoreSync(user) {
     rejectUser,
     setUserRole,
     removeUser,
+    assignScenarioToUser,
+    assignScenariosToUser,
+    setScenarioDifficulty,
 
     // Demo data
     seedDemoData,
