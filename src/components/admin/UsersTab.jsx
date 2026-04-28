@@ -159,7 +159,7 @@ export default function UsersTab({
                   scenarioOptions={scenarioOptions}
                 />
                 <div className="flex items-center gap-2 flex-wrap">
-                  {onAssignScenario && u.role !== 'admin' && (
+                  {onAssignScenario && (
                     <ScenarioMultiSelect
                       user={u}
                       scenarioOptions={scenarioOptions}
@@ -328,7 +328,10 @@ function ScenarioMultiSelect({
             className="fixed inset-0 z-30"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 top-full mt-1 z-40 bg-white border rounded-md shadow-lg p-2 w-80 max-h-96 overflow-y-auto">
+          <div
+            className="absolute right-0 top-full mt-1 z-40 bg-white border rounded-md shadow-lg p-2 w-80 overflow-y-auto"
+            style={{ maxHeight: 'min(32rem, calc(100vh - 8rem))' }}
+          >
             {scenarioOptions.length === 0 && (
               <div className="text-xs text-slate-400 px-2 py-1">No scenarios available</div>
             )}
