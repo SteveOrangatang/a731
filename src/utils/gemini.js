@@ -1,204 +1,166 @@
-import { GEMINI_API_KEY, GEMINI_API_KEYS, modelRotation } from '../config/constants';
+import { modelRotation } from '../config/constants';
 
 /**
- * In-memory map of (apiKey:model) pairs currently rate-limited and the
- * timestamp at which they should be available again. Each (key, model) pair
- * is tracked independently because each Google account has its own quota
- * bucket per model. Survives across calls within the same browser tab.
+ * Client-side Gemini wrapper. The actual API key never lives in the browser;
+ * the request is forwarded through the server-side proxy at /api/gemini,
+ * which resolves the key from Firestore (admin-controlled) or the deployment
+ * environment.
+ *
+ * This file still owns model-rotation logic (gemini-2.5-flash → 2.5-flash-lite
+ * → 2.5-pro on 429s) since model availability is per-key on Google's side and
+ * the rotation hides that from callers.
  */
-const _rateLimitedUntil = new Map(); // "key:model" -> ms timestamp
 
-const limitKey = (apiKey, model) => `${apiKey.slice(0, 8)}:${model}`;
+const PROXY_URL = '/api/gemini';
 
-/**
- * Parse the "retry in X seconds" hint from Gemini's 429 error body and
- * fall back to a sane default if it isn't present.
- */
+// Per-model rate-limit windows. We can't see the actual key any more, so we
+// track this only at the model level — when a 429 comes back for one model
+// we skip it for a while and try the next.
+const _rateLimitedUntil = new Map(); // model -> ms timestamp
+
 function parseRetryAfterMs(errMsg) {
   if (!errMsg) return 30_000;
   const m = errMsg.match(/retry in (\d+(?:\.\d+)?)\s*s/i);
-  if (m) return Math.ceil(parseFloat(m[1]) * 1000) + 500; // small buffer
-  // Default: assume the per-minute window
+  if (m) return Math.ceil(parseFloat(m[1]) * 1000) + 500;
   return 60_000;
 }
 
+async function postProxy(model, body) {
+  const res = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, ...body }),
+  });
+  const text = await res.text();
+  let parsed = null;
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch (err) {
+    parsed = { rawText: text };
+  }
+  return { status: res.status, ok: res.ok, data: parsed };
+}
+
 /**
- * Make a single Gemini call with model fallback. Iterates the rotation list,
- * skipping any model whose rate-limit window has not yet expired. On 429,
- * marks the offending model and tries the next one. Throws only if every
- * model is exhausted and the soonest-available is more than a minute away.
+ * Call the proxy, rotating through models on rate limits / failures.
+ * Throws only if every model is exhausted with no near-term recovery.
  */
 async function callGeminiWithFallback(body, { prefer } = {}) {
-  if (!GEMINI_API_KEYS.length) {
-    throw new Error('No Gemini API key configured.');
-  }
-
-  // Build the candidate list: optional preferred model first, then the
-  // standard rotation, deduplicated.
   const rotation = modelRotation();
-  const models = prefer ? [prefer, ...rotation.filter((m) => m !== prefer)] : rotation;
-
-  // Iterate every (key, model) pair. Each pair has its own quota bucket on
-  // Google's side, so this is the real lever for free-tier capacity.
-  const candidates = [];
-  for (const model of models) {
-    for (const apiKey of GEMINI_API_KEYS) {
-      candidates.push({ apiKey, model });
-    }
-  }
+  const models = prefer
+    ? [prefer, ...rotation.filter((m) => m !== prefer)]
+    : rotation;
 
   const errors = [];
   const now = () => Date.now();
 
-  for (const { apiKey, model } of candidates) {
-    const lk = limitKey(apiKey, model);
-    const blockedUntil = _rateLimitedUntil.get(lk) || 0;
+  for (const model of models) {
+    const blockedUntil = _rateLimitedUntil.get(model) || 0;
     if (blockedUntil > now()) continue;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-    // Per-request timeout so a single hung request can't stall the rotation.
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25_000);
-
+    let res;
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-
-      if (res.ok) {
-        return { data: await res.json(), model, apiKey };
-      }
-
-      const errData = await res.json().catch(() => null);
-      const errMsg = errData?.error?.message || `HTTP ${res.status}`;
-
-      if (res.status === 429 || /quota|rate/i.test(errMsg)) {
-        const retryMs = parseRetryAfterMs(errMsg);
-        _rateLimitedUntil.set(lk, now() + retryMs);
-        // eslint-disable-next-line no-console
-        console.warn(`[gemini] ${lk} rate-limited, retry in ${retryMs}ms; trying next pair`);
-        errors.push({ pair: lk, status: res.status, errMsg });
-        continue;
-      }
-
-      if (res.status === 404) {
-        errors.push({ pair: lk, status: 404, errMsg });
-        continue;
-      }
-
-      // eslint-disable-next-line no-console
-      console.warn(`[gemini] ${lk} error ${res.status}: ${errMsg}`);
-      errors.push({ pair: lk, status: res.status, errMsg });
-      continue;
+      res = await postProxy(model, body);
     } catch (networkErr) {
-      clearTimeout(timer);
-      // eslint-disable-next-line no-console
-      console.warn(`[gemini] ${lk} network error: ${networkErr.message}`);
-      errors.push({ pair: lk, status: 'network', errMsg: networkErr.message });
+      errors.push({ model, status: 'network', errMsg: networkErr.message });
       continue;
     }
+
+    if (res.ok) return { data: res.data, model };
+
+    const errMsg =
+      res.data?.error?.message || res.data?.error || `HTTP ${res.status}`;
+
+    if (res.status === 429 || /quota|rate/i.test(String(errMsg))) {
+      const retryMs = parseRetryAfterMs(String(errMsg));
+      _rateLimitedUntil.set(model, now() + retryMs);
+      errors.push({ model, status: res.status, errMsg });
+      continue;
+    }
+
+    if (res.status === 404) {
+      errors.push({ model, status: 404, errMsg });
+      continue;
+    }
+
+    if (res.status === 503) {
+      // No-key configured — short-circuit so the user sees this first
+      throw new Error(typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg));
+    }
+
+    errors.push({ model, status: res.status, errMsg });
   }
 
-  // Every candidate failed. If something will recover soon, wait for it.
+  // Wait for the soonest recovery if it's close.
   const soonest = Math.min(
     ...Array.from(_rateLimitedUntil.values()).filter((t) => t > now()),
   );
   if (Number.isFinite(soonest) && soonest - now() < 60_000) {
     const wait = Math.max(soonest - now(), 0) + 250;
     await new Promise((r) => setTimeout(r, wait));
-    for (const { apiKey, model } of candidates) {
-      const lk = limitKey(apiKey, model);
-      if ((_rateLimitedUntil.get(lk) || 0) > now()) continue;
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    for (const model of models) {
+      const blockedUntil = _rateLimitedUntil.get(model) || 0;
+      if (blockedUntil > now()) continue;
       try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) return { data: await res.json(), model, apiKey };
+        const res = await postProxy(model, body);
+        if (res.ok) return { data: res.data, model };
       } catch (_) {}
     }
   }
 
   const detail = errors
-    .map((e) => `${e.pair}: ${e.status} ${(e.errMsg || '').slice(0, 80)}`)
+    .map((e) => `${e.model}: ${e.status} ${(e.errMsg || '').toString().slice(0, 80)}`)
     .join(' | ');
-  throw new Error(`All Gemini key/model pairs exhausted. ${detail}`);
+  throw new Error(`All Gemini models exhausted. ${detail}`);
 }
 
 /**
- * Call the Gemini generative-language API with conversation history.
- *
- * @param {string}   userMessage     The latest student message.
- * @param {Array}    currentMessages All messages so far (including the new one).
- * @param {Object}   agent           The selected persona object.
- * @param {string}   studentRank     e.g. "MAJ"
- * @param {string}   studentName     e.g. "Smith"
- * @param {Object}   [lesson]        Optional lesson record for context injection.
- * @param {Object}   [options]       { mode: 'intake' | 'briefback' } for leaders.
- * @returns {Promise<string>}        The model's reply text.
- */
-/**
- * Diagnostic: ping every model in the rotation with a one-token prompt
- * and report status (ok / 404 / 429 / 403 / network / etc.) per model.
- *
- * Useful for verifying which fallbacks your API key actually has access to,
- * and for spot-checking quota state before a class session.
+ * Diagnostic: ping every model in the rotation and report status.
+ * Used by the admin dashboard's "Test Gemini rotation" button. With the
+ * proxy in place, the test goes through the proxy too, so a green result
+ * also means the proxy + key resolution chain is healthy.
  */
 export async function testModelRotation() {
-  if (!GEMINI_API_KEYS.length) {
-    return [{ model: '(no key)', keyIndex: -1, status: 'error', detail: 'No VITE_GEMINI_API_KEY(S) set' }];
-  }
   const models = modelRotation();
   const tinyBody = {
     contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
     generationConfig: { maxOutputTokens: 1, temperature: 0 },
   };
 
-  const pairs = [];
-  for (const model of models) {
-    for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
-      pairs.push({ apiKey: GEMINI_API_KEYS[i], keyIndex: i + 1, model });
-    }
-  }
-
   const results = await Promise.all(
-    pairs.map(async ({ apiKey, keyIndex, model }) => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 12_000);
+    models.map(async (model) => {
       try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(tinyBody),
-          signal: ctrl.signal,
-        });
-        clearTimeout(timer);
+        const res = await postProxy(model, tinyBody);
         if (res.ok) {
-          return { model, keyIndex, status: 'ok', detail: 'available' };
+          return { model, keyIndex: 1, status: 'ok', detail: 'available' };
         }
-        const errData = await res.json().catch(() => null);
-        const errMsg = errData?.error?.message || `HTTP ${res.status}`;
-        if (res.status === 429 || /quota|rate/i.test(errMsg)) {
-          return { model, keyIndex, status: 'rate-limited', detail: errMsg };
+        const errMsg =
+          res.data?.error?.message || res.data?.error || `HTTP ${res.status}`;
+        if (res.status === 429 || /quota|rate/i.test(String(errMsg))) {
+          return { model, keyIndex: 1, status: 'rate-limited', detail: String(errMsg) };
         }
         if (res.status === 404) {
-          return { model, keyIndex, status: 'not-found', detail: 'model not available on this key' };
+          return {
+            model,
+            keyIndex: 1,
+            status: 'not-found',
+            detail: 'model not available on this key',
+          };
         }
         if (res.status === 403) {
-          return { model, keyIndex, status: 'forbidden', detail: errMsg };
+          return { model, keyIndex: 1, status: 'forbidden', detail: String(errMsg) };
         }
-        return { model, keyIndex, status: 'error', detail: `HTTP ${res.status}: ${errMsg}` };
+        if (res.status === 503) {
+          return { model, keyIndex: 1, status: 'no-key', detail: String(errMsg) };
+        }
+        return {
+          model,
+          keyIndex: 1,
+          status: 'error',
+          detail: `HTTP ${res.status}: ${errMsg}`,
+        };
       } catch (err) {
-        clearTimeout(timer);
-        return { model, keyIndex, status: 'network', detail: err.message };
+        return { model, keyIndex: 1, status: 'network', detail: err.message };
       }
     }),
   );
@@ -214,17 +176,9 @@ export async function generateAIResponse(
   lesson,
   options = {},
 ) {
-  if (!GEMINI_API_KEY) {
-    return '[No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env.local file.]';
-  }
-
-  // Count how many user turns have occurred (to gauge whether we're ready to resolve).
   const userTurns = currentMessages.filter((m) => m.role === 'user').length;
   const minTurns = Number(agent.minTurns) || 6;
-  const turnsRemaining = Math.max(0, minTurns - userTurns);
 
-  // Briefback mode kicks in only when the leader is engaged after the
-  // subordinate phase. Drives a small directive override.
   const briefback =
     agent.role === 'leader' &&
     options.mode === 'briefback' &&
@@ -233,24 +187,15 @@ export async function generateAIResponse(
     ? agent.conversationGuide?.briefback?.behavior || agent.directive
     : agent.directive;
 
-  // Compact lesson block: title + aiContext only. The persona's directive
-  // already encodes the archetype-specific behavior, so we don't need to
-  // restate the full lesson description here.
   const lessonBlock = lesson
     ? `Scenario: ${lesson.title || ''}${lesson.aiContext ? ` — ${lesson.aiContext}` : ''}`
     : '';
 
-  // Subordinate-opening discipline: short and to the point. Avoids the
-  // bloated multi-paragraph version that was driving tokens up.
   const subordinateRule =
     agent.role === 'subordinate'
       ? `Important: do NOT volunteer your archetype's preferred recommendation on turn 1. Acknowledge the student, ask what they need, and only reveal your disposition after they explicitly ask for your read or opinion.`
       : '';
 
-  // Leader resolution rule: leaders must COMMIT to a path once the student
-  // has substantively answered their concerns. Without this, the model loops
-  // forever inventing new objections. SKIPPED in 'hard' mode so the leader
-  // resists indefinitely (the original behavior, useful for advanced students).
   const isHard = options.difficulty === 'hard';
   const leaderRule =
     agent.role === 'leader' && !isHard
@@ -279,7 +224,6 @@ Pacing: target at least ${minTurns} student turns before you resolve. Current tu
 
 Style: one short paragraph per reply. Professional military chat. No bullet lists. Stay in character.`;
 
-  // Build history — exclude the synthetic opening-message marker
   const history = currentMessages
     .filter((m) => m.id !== 'opening')
     .map((m) => ({
@@ -287,7 +231,6 @@ Style: one short paragraph per reply. Professional military chat. No bullet list
       parts: [{ text: m.text }],
     }));
 
-  // If agent initiates, inject the opening as the first model turn
   if (
     agent.initiates &&
     agent.openingMessage &&
@@ -299,8 +242,6 @@ Style: one short paragraph per reply. Professional military chat. No bullet list
     });
   }
 
-  // Note: the user message is already in currentMessages — don't double-push.
-  // But if the caller hasn't included it yet, push it.
   if (history[history.length - 1]?.role !== 'user') {
     history.push({ role: 'user', parts: [{ text: userMessage }] });
   }
@@ -323,17 +264,6 @@ Style: one short paragraph per reply. Professional military chat. No bullet list
   }
 }
 
-/**
- * Ask Gemini to produce a structured grade.
- *
- * @param {Object} params
- * @param {Array}  params.messages     Full chat transcript
- * @param {string} params.paperText    The student's submitted paper
- * @param {string} params.rubricText   Extracted text of the rubric
- * @param {Object} params.studentMeta  { rank, lastName, email, lessonTitle }
- * @param {Object} [params.lesson]     Optional lesson record for grader context.
- * @returns {Promise<Object>}          { summary, comparison, criteria: [{ name, description, maxScore, score, rationale }], totalScore, maxTotal, overallComments }
- */
 export async function generateGrade({
   messages,
   paperText,
@@ -341,16 +271,13 @@ export async function generateGrade({
   studentMeta,
   lesson,
 }) {
-  if (!GEMINI_API_KEY) {
-    throw new Error('No Gemini API key configured.');
-  }
-
   const transcript = (messages || [])
     .filter((m) => m.id !== 'opening' || m.text)
     .map((m) => {
-      const who = m.role === 'user'
-        ? `${studentMeta.rank || ''} ${studentMeta.lastName || 'Student'}`.trim()
-        : 'Interlocutor';
+      const who =
+        m.role === 'user'
+          ? `${studentMeta.rank || ''} ${studentMeta.lastName || 'Student'}`.trim()
+          : 'Interlocutor';
       return `${who}: ${m.text}`;
     })
     .join('\n\n');
@@ -418,7 +345,125 @@ ${paperText || '(no paper submitted)'}`;
   try {
     return JSON.parse(text);
   } catch (err) {
-    // Try to extract JSON from code fences if model ignored response format.
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('Model returned unparseable output.');
+  }
+}
+
+/**
+ * Student-facing scenario analysis. Looks at every transcript the student
+ * had within one scenario and uses the lesson's `outcomeRubric` to project
+ * the real-world outcome of their choices.
+ *
+ * @param {Object} params
+ * @param {Array}  params.transcripts   All this student's transcripts for the scenario.
+ * @param {Object} params.lesson        The lesson record (with outcomeRubric).
+ * @param {Object} params.studentMeta   { rank, lastName }
+ * @returns {Promise<Object>}           {
+ *   pathLabel, severity, pathConfidence,
+ *   summary,                            2-4 sentence overview
+ *   personaInteractions: [              one entry per persona engaged
+ *     { agentName, role, archetype, performance, observations }
+ *   ],
+ *   outcomeNarrative,                   real-world projection (what happens next)
+ *   recommendations,                    2-4 actionable takeaways
+ * }
+ */
+export async function generateAnalysis({
+  transcripts,
+  lesson,
+  studentMeta,
+}) {
+  const rubric = lesson?.outcomeRubric || null;
+
+  const transcriptBlock = (transcripts || [])
+    .map((t) => {
+      const turns = (t.messages || [])
+        .filter((m) => m.id !== 'opening' || m.text)
+        .map((m) => {
+          const who =
+            m.role === 'user'
+              ? `${studentMeta.rank || ''} ${studentMeta.lastName || 'Student'}`.trim()
+              : t.agentName || 'Interlocutor';
+          return `${who}: ${m.text}`;
+        })
+        .join('\n');
+      const userTurnCount = (t.messages || []).filter((m) => m.role === 'user').length;
+      return `=== ${t.agentName || t.agentId || 'Persona'} (${userTurnCount} student turns) ===\n${turns || '(no exchange)'}\n`;
+    })
+    .join('\n');
+
+  const rubricBlock = rubric
+    ? `Decision-tree rubric for this scenario (from the instructor):
+- OPTIMAL: ${rubric.optimal?.summary || ''}
+  Real-world outcome: ${rubric.optimal?.outcome || ''}
+- ACCEPTABLE: ${rubric.acceptable?.summary || ''}
+  Real-world outcome: ${rubric.acceptable?.outcome || ''}
+- SUBOPTIMAL: ${rubric.suboptimal?.summary || ''}
+  Real-world outcome: ${rubric.suboptimal?.outcome || ''}
+- CATASTROPHIC: ${rubric.catastrophic?.summary || ''}
+  Real-world outcome: ${rubric.catastrophic?.outcome || ''}`
+    : '(No structured rubric provided. Use general military ethical-leadership standards and the scenario aiContext to project a plausible outcome.)';
+
+  const systemPrompt = `You are an after-action analyst for a CGSC ethical decision-making simulation. The student has finished talking with the personas in one scenario; now you write the after-action review.
+
+You receive: the lesson context, a structured outcome rubric describing four decision-tree paths and their downstream real-world consequences, and the full transcript of every conversation the student had inside this scenario.
+
+Your job:
+1. Classify which of the four rubric paths the student's actual behavior most closely matches (Optimal / Acceptable / Suboptimal / Catastrophic).
+2. Write a 2–4 sentence neutral summary of what the student did across personas.
+3. For each persona the student engaged (subordinates AND leader), write a one-paragraph evaluation of how the student handled that interaction — what they did well, what they missed, how that persona's archetype lens applies. Skip personas the student did not engage with.
+4. Write the projected real-world outcome based on the matched rubric path. Use the rubric's outcome text as the spine but adapt it specifically to what the student actually did. Be concrete: name the downstream consequence (e.g., "two weeks later you're selected for an Alert-30 mission and the squadron loses an aircraft and crew") so the student feels the weight of their choice.
+5. Give 2–4 specific recommendations they should take away.
+
+Be honest. If the student folded to the leader's pressure and committed to the unethical path, say so plainly and project the catastrophic outcome. If they pushed back well and offered a real alternative, project the optimal outcome. The point is for the student to feel the consequence of their decision, not to be reassured.
+
+Output STRICTLY a single valid JSON object — no markdown code fences, no commentary outside the JSON. Schema:
+
+{
+  "pathLabel": "Optimal" | "Acceptable" | "Suboptimal" | "Catastrophic",
+  "pathConfidence": 0.0 to 1.0,
+  "summary": "2-4 sentences",
+  "personaInteractions": [
+    {
+      "agentName": "string",
+      "role": "leader" | "subordinate",
+      "archetype": "loyalist" | "operator" | "stickler" | "partner" | null,
+      "performance": "Strong" | "Adequate" | "Weak" | "Skipped",
+      "observations": "1-2 sentence paragraph"
+    }
+  ],
+  "outcomeNarrative": "2-5 sentence projection of what happens next in the world based on the chosen path",
+  "recommendations": [
+    "string", "string"
+  ]
+}`;
+
+  const userPrompt = `STUDENT: ${studentMeta.rank || ''} ${studentMeta.lastName || ''}
+LESSON: ${lesson?.title || ''}
+
+=========== LESSON CONTEXT ===========
+${lesson?.description ? `Description: ${lesson.description}\n` : ''}${lesson?.objectives ? `Objectives:\n${lesson.objectives}\n` : ''}${lesson?.studentInstructions ? `Student instructions:\n${lesson.studentInstructions}\n` : ''}${lesson?.aiContext ? `Instructor context:\n${lesson.aiContext}\n` : ''}
+
+=========== OUTCOME RUBRIC ===========
+${rubricBlock}
+
+=========== CONVERSATIONS ===========
+${transcriptBlock || '(no conversations)'}`;
+
+  const { data } = await callGeminiWithFallback({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.4,
+    },
+  });
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  try {
+    return JSON.parse(text);
+  } catch (err) {
     const match = text.match(/\{[\s\S]*\}/);
     if (match) return JSON.parse(match[0]);
     throw new Error('Model returned unparseable output.');

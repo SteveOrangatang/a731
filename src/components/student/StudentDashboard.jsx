@@ -8,13 +8,17 @@ import {
   LogOut,
   User,
   ChevronRight,
+  ChevronDown,
   Shield,
   RotateCcw,
   AlertTriangle,
+  Sparkles,
+  Info,
 } from 'lucide-react';
 import Header from '../Header';
 import PaperSubmission from './PaperSubmission';
 import TranscriptViewer from './TranscriptViewer';
+import ScenarioAnalysis from './ScenarioAnalysis';
 
 /** Sorted lesson ids (by lesson.order). */
 function lessonKeys(lessons) {
@@ -36,14 +40,17 @@ export default function StudentDashboard({
   lessons,
   transcripts,
   submissions,
+  analyses,
   onOpenLesson,
   onSignOut,
   onSubmitPaper,
+  onUpsertAnalysis,
   onDeleteTranscript,
   onResetScenario,
   onEnterAdmin,
 }) {
   const [paperLesson, setPaperLesson] = useState(null);
+  const [analysisLesson, setAnalysisLesson] = useState(null);
   const [viewingTranscript, setViewingTranscript] = useState(null);
   const [confirmReset, setConfirmReset] = useState(null); // { lessonKey, lessonTitle, transcriptCount, hasSubmission }
   const [resetting, setResetting] = useState(false);
@@ -169,6 +176,8 @@ export default function StudentDashboard({
                     )}
                   </div>
 
+                  <ScenarioOverview lesson={lesson} />
+
                   <div className="space-y-2 text-xs">
                     <div className="flex items-center justify-between text-slate-600">
                       <span className="flex items-center gap-1.5">
@@ -232,6 +241,30 @@ export default function StudentDashboard({
                       </span>
                       <ChevronRight className="h-4 w-4" />
                     </button>
+                    {onUpsertAnalysis && (
+                      <button
+                        onClick={() => setAnalysisLesson(key)}
+                        disabled={chatsWithContent.length === 0}
+                        className="w-full flex items-center justify-between bg-gradient-to-r from-amber-500 to-amber-600 text-white px-3 py-2 rounded-md text-sm font-semibold hover:from-amber-600 hover:to-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title={
+                          chatsWithContent.length === 0
+                            ? 'Engage with at least one persona before running the analysis'
+                            : 'Run an after-action analysis of your conversations'
+                        }
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          {(analyses || []).some(
+                            (a) =>
+                              a.lessonId === key &&
+                              (a.userId === profile.uid || a.userId === profile.id),
+                          )
+                            ? 'View scenario analysis'
+                            : 'Run scenario analysis'}
+                        </span>
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    )}
                     {onResetScenario &&
                       (lessonTranscripts.length > 0 || submission) && (
                         <button
@@ -349,6 +382,23 @@ export default function StudentDashboard({
         />
       )}
 
+      {analysisLesson && (
+        <ScenarioAnalysis
+          lesson={lessons[analysisLesson] || { id: analysisLesson, title: analysisLesson }}
+          transcripts={myTranscripts.filter(
+            (t) => t.lessonId === analysisLesson,
+          )}
+          profile={profile}
+          existing={(analyses || []).find(
+            (a) =>
+              a.lessonId === analysisLesson &&
+              (a.userId === profile.uid || a.userId === profile.id),
+          )}
+          onSave={onUpsertAnalysis}
+          onClose={() => setAnalysisLesson(null)}
+        />
+      )}
+
       {confirmReset && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
@@ -426,5 +476,50 @@ export default function StudentDashboard({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Collapsible per-scenario overview shown inside each dashboard card.
+ * Closed by default to keep the grid scannable; opens to show the full
+ * description, learning objectives, and student instructions for the
+ * scenario. Uses a native <details> so each card opens independently.
+ */
+function ScenarioOverview({ lesson }) {
+  const hasContent =
+    lesson?.description || lesson?.objectives || lesson?.studentInstructions;
+  if (!hasContent) return null;
+
+  return (
+    <details className="group rounded-md border border-slate-200 bg-slate-50 open:bg-white">
+      <summary className="cursor-pointer list-none flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-md group-open:rounded-b-none">
+        <span className="flex items-center gap-1.5">
+          <Info className="h-3.5 w-3.5 text-emerald-600" />
+          Scenario overview
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-open:rotate-180 transition-transform" />
+      </summary>
+      <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-slate-700 leading-relaxed">
+        {lesson.description && (
+          <p>{lesson.description}</p>
+        )}
+        {lesson.objectives && (
+          <div>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">
+              Objectives
+            </h4>
+            <p className="whitespace-pre-wrap">{lesson.objectives}</p>
+          </div>
+        )}
+        {lesson.studentInstructions && (
+          <div>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">
+              Your role
+            </h4>
+            <p className="whitespace-pre-wrap">{lesson.studentInstructions}</p>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }

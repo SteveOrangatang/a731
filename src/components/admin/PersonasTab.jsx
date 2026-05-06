@@ -7,6 +7,9 @@ import {
   Edit2,
   Trash2,
   BookOpen,
+  RotateCcw,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -213,10 +216,14 @@ export default function PersonasTab({
   onDelete,
   onCreate,
   onUpdate,
+  onResetToSeed,
 }) {
   const [isAdding, setIsAdding]   = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [filter, setFilter]       = useState('all');
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetStatus, setResetStatus] = useState('');
 
   const keys = lessonKeys(lessons);
   const fallbackLessonId = defaultLessonId(lessons);
@@ -229,8 +236,30 @@ export default function PersonasTab({
   return (
     <div className="divide-y">
       <div className="p-6 bg-slate-50 border-b flex justify-between items-center gap-3 flex-wrap">
-        <h3 className="font-bold text-slate-800">Managed AI Personas</h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-bold text-slate-800">Managed AI Personas</h3>
+          {resetStatus && (
+            <span className="text-[11px] text-emerald-700 font-semibold">
+              {resetStatus}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
+          {onResetToSeed && (
+            <button
+              onClick={() => setConfirmReset(true)}
+              disabled={resetting}
+              className="inline-flex items-center gap-1.5 bg-white border text-slate-700 px-3 py-2 rounded-md text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+              title="Wipe persona docs not in the seed and overwrite the rest from initialAgents.js"
+            >
+              {resetting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+              {resetting ? 'Resetting…' : 'Reset to seed'}
+            </button>
+          )}
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -353,6 +382,70 @@ export default function PersonasTab({
           )}
         </div>
       ))}
+
+      {confirmReset && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-50 rounded-full">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Reset personas to seed?</h3>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  This will <strong>delete every persona that isn't in the canonical seed</strong>{' '}
+                  (initialAgents.js) and <strong>overwrite the seed personas</strong> with the
+                  current code's values. Use this to clean up duplicates or fix
+                  personas with missing/wrong <code className="bg-slate-100 px-1 rounded">lessonId</code> fields.
+                </p>
+                <p className="text-xs text-amber-700 mt-2 leading-relaxed">
+                  Custom personas you created through the admin UI will be removed if their IDs
+                  aren't in the seed. Conversation transcripts attached to deleted personas will
+                  remain in Firestore but will no longer link to a live persona.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setConfirmReset(false)}
+                disabled={resetting}
+                className="px-4 py-2 border rounded text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={resetting}
+                onClick={async () => {
+                  setResetting(true);
+                  setResetStatus('');
+                  try {
+                    const result = await onResetToSeed();
+                    setResetStatus(
+                      `Reset complete: ${result.deleted} removed, ${result.seeded} seeded.`,
+                    );
+                    setConfirmReset(false);
+                    setTimeout(() => setResetStatus(''), 6000);
+                  } catch (err) {
+                    setResetStatus(
+                      `Reset failed: ${err?.message || 'unknown error'}`,
+                    );
+                  } finally {
+                    setResetting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-rose-600 text-white rounded text-sm font-semibold hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {resetting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3.5 w-3.5" />
+                )}
+                {resetting ? 'Resetting…' : 'Reset personas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

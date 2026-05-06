@@ -16,12 +16,21 @@ import {
 } from 'lucide-react';
 import { extractTextFromFile } from '../../utils/fileParsers';
 
+const EMPTY_RUBRIC_PATH = { summary: '', outcome: '' };
+const EMPTY_RUBRIC = {
+  optimal: { ...EMPTY_RUBRIC_PATH },
+  acceptable: { ...EMPTY_RUBRIC_PATH },
+  suboptimal: { ...EMPTY_RUBRIC_PATH },
+  catastrophic: { ...EMPTY_RUBRIC_PATH },
+};
+
 const EMPTY_DRAFT = {
   title: '',
   description: '',
   objectives: '',
   studentInstructions: '',
   aiContext: '',
+  outcomeRubric: EMPTY_RUBRIC,
 };
 
 export default function LessonsTab({
@@ -294,6 +303,7 @@ function LessonCard({
               objectives: lesson.objectives || '',
               studentInstructions: lesson.studentInstructions || '',
               aiContext: lesson.aiContext || '',
+              outcomeRubric: lesson.outcomeRubric || EMPTY_RUBRIC,
             }}
             inline
             onCancel={onToggle}
@@ -376,6 +386,7 @@ function LessonEditor({ draft: initial, onSave, onCancel, title, inline }) {
         objectives: draft.objectives.trim(),
         studentInstructions: draft.studentInstructions.trim(),
         aiContext: draft.aiContext.trim(),
+        outcomeRubric: draft.outcomeRubric || EMPTY_RUBRIC,
       });
     } catch (err) {
       setError(err.message || 'Save failed.');
@@ -470,6 +481,11 @@ function LessonEditor({ draft: initial, onSave, onCancel, title, inline }) {
         />
       </Field>
 
+      <RubricEditor
+        rubric={draft.outcomeRubric || EMPTY_RUBRIC}
+        onChange={(next) => set('outcomeRubric', next)}
+      />
+
       {error && (
         <div className="text-red-600 text-xs bg-red-50 border border-red-200 rounded p-2">
           {error}
@@ -498,6 +514,96 @@ function LessonEditor({ draft: initial, onSave, onCancel, title, inline }) {
         </button>
       </div>
     </form>
+  );
+}
+
+function RubricEditor({ rubric, onChange }) {
+  const [open, setOpen] = useState(false);
+  const paths = [
+    {
+      key: 'optimal',
+      label: 'Optimal',
+      tone: 'bg-emerald-50 border-emerald-200',
+    },
+    {
+      key: 'acceptable',
+      label: 'Acceptable',
+      tone: 'bg-sky-50 border-sky-200',
+    },
+    {
+      key: 'suboptimal',
+      label: 'Suboptimal',
+      tone: 'bg-amber-50 border-amber-200',
+    },
+    {
+      key: 'catastrophic',
+      label: 'Catastrophic',
+      tone: 'bg-rose-50 border-rose-200',
+    },
+  ];
+
+  const updatePath = (key, field, value) => {
+    onChange({
+      ...rubric,
+      [key]: { ...(rubric[key] || {}), [field]: value },
+    });
+  };
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between text-left"
+      >
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+            Outcome Rubric
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Four decision-tree paths and their projected real-world outcomes.
+            Used by the student-facing scenario analysis to project
+            consequences. Click to {open ? 'collapse' : 'expand'}.
+          </p>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 text-slate-500 transition-transform ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          {paths.map(({ key, label, tone }) => {
+            const p = rubric[key] || {};
+            return (
+              <div
+                key={key}
+                className={`border rounded-lg p-3 space-y-2 ${tone}`}
+              >
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  {label} path
+                </div>
+                <textarea
+                  value={p.summary || ''}
+                  onChange={(e) => updatePath(key, 'summary', e.target.value)}
+                  placeholder={`What the student does on the ${label.toLowerCase()} path. 1–2 sentences.`}
+                  rows={2}
+                  className="w-full border p-2 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-400 resize-y bg-white"
+                />
+                <textarea
+                  value={p.outcome || ''}
+                  onChange={(e) => updatePath(key, 'outcome', e.target.value)}
+                  placeholder={`The downstream real-world consequence. 2–4 sentences.`}
+                  rows={3}
+                  className="w-full border p-2 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-400 resize-y bg-white"
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Shield,
   ShieldAlert,
@@ -6,10 +6,15 @@ import {
   Trash2,
   Mail,
   Key,
+  KeyRound,
+  Eye,
+  EyeOff,
   User as UserIcon,
   AlertTriangle,
   Loader2,
   Check,
+  Save,
+  RefreshCw,
 } from 'lucide-react';
 
 const RANKS = [
@@ -32,6 +37,10 @@ export default function SecurityTab({
   onCreateAdmin,
   onSetRole,
   onRemoveUser,
+  onGetApiKeyConfig,
+  onSetApiKey,
+  onClearApiKey,
+  currentAdmin,
 }) {
   const [form, setForm] = useState({
     email: '',
@@ -106,6 +115,14 @@ export default function SecurityTab({
   return (
     <div className="p-8">
       <div className="max-w-2xl space-y-10">
+        {/* ── Gemini API key ── */}
+        <ApiKeySection
+          onGetApiKeyConfig={onGetApiKeyConfig}
+          onSetApiKey={onSetApiKey}
+          onClearApiKey={onClearApiKey}
+          currentAdmin={currentAdmin}
+        />
+
         {/* ── Master bootstrap notice ── */}
         <div>
           <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
@@ -340,6 +357,207 @@ function ConfirmRemoveModal({ user, onCancel, onConfirm }) {
             {working ? 'Removing…' : 'Remove admin'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ApiKeySection({ onGetApiKeyConfig, onSetApiKey, onClearApiKey, currentAdmin }) {
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+
+  const refresh = async () => {
+    if (!onGetApiKeyConfig) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const c = await onGetApiKeyConfig();
+      setConfig(c);
+    } catch (err) {
+      setError(err?.message || 'Could not load API key status.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSave = async (e) => {
+    e?.preventDefault?.();
+    setError('');
+    setStatus('');
+    if (!draft.trim()) {
+      setError('Paste a key value before saving.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await onSetApiKey(
+        draft.trim(),
+        currentAdmin?.email || currentAdmin?.lastName || null,
+      );
+      setStatus('API key saved. The next chat reply will use the new key.');
+      setDraft('');
+      await refresh();
+      setTimeout(() => setStatus(''), 4000);
+    } catch (err) {
+      setError(err?.message || 'Could not save key.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleClear = async () => {
+    if (
+      !window.confirm(
+        'Clear the saved Gemini API key? The proxy will fall back to GEMINI_API_KEY in the deployment environment, or fail with "no key configured" if none is set there.',
+      )
+    )
+      return;
+    setBusy(true);
+    setError('');
+    setStatus('');
+    try {
+      await onClearApiKey(currentAdmin?.email || currentAdmin?.lastName || null);
+      setStatus('Key cleared.');
+      await refresh();
+      setTimeout(() => setStatus(''), 3000);
+    } catch (err) {
+      setError(err?.message || 'Could not clear key.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
+        <KeyRound className="h-5 w-5 mr-2 text-emerald-600" />
+        Gemini API key
+      </h3>
+      <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+        The Gemini key powers every persona conversation and every analysis the
+        students run. It's stored in Firestore (admin-readable only) and consumed
+        by the server-side proxy at <code className="bg-slate-200 px-1 rounded">/api/gemini</code>.
+        The key never reaches the browser — students cannot extract it from
+        DevTools. To rotate, paste the new key and click Save. The next chat
+        request will use it.
+      </p>
+
+      <div className="p-4 bg-slate-50 rounded-lg border space-y-3">
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading current key status…
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs text-slate-700">
+                Current key:{' '}
+                {config?.hasKey ? (
+                  <span className="font-mono bg-white border px-2 py-0.5 rounded">
+                    {config.masked || 'set'}
+                  </span>
+                ) : (
+                  <span className="text-amber-700 font-semibold">
+                    Not set (proxy falls back to GEMINI_API_KEY env var)
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={refresh}
+                disabled={busy}
+                className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"
+                title="Refresh"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Refresh
+              </button>
+            </div>
+            {config?.lastUpdated && (
+              <div className="text-[10px] text-slate-500">
+                Last updated {new Date(config.lastUpdated).toLocaleString()}
+                {config.updatedBy ? ` by ${config.updatedBy}` : ''}.
+              </div>
+            )}
+
+            <form onSubmit={handleSave} className="space-y-3 pt-2 border-t">
+              <label className="block text-xs font-semibold text-slate-700">
+                {config?.hasKey ? 'Replace key' : 'Set key'}
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-grow">
+                  <Key className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <input
+                    type={show ? 'text' : 'password'}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="AIza…"
+                    autoComplete="off"
+                    spellCheck="false"
+                    className="w-full pl-10 pr-10 py-2 border rounded-md outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShow(!show)}
+                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-700"
+                    title={show ? 'Hide' : 'Show'}
+                  >
+                    {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={busy || !draft.trim()}
+                  className="inline-flex items-center gap-1.5 bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-emerald-800 disabled:opacity-50"
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {busy ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+
+              {config?.hasKey && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    disabled={busy}
+                    className="text-xs text-slate-500 hover:text-rose-700 inline-flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Clear saved key
+                  </button>
+                </div>
+              )}
+
+              {error && (
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 flex items-start gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+              {status && (
+                <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 flex items-center gap-2">
+                  <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>{status}</span>
+                </div>
+              )}
+            </form>
+          </>
+        )}
       </div>
     </div>
   );

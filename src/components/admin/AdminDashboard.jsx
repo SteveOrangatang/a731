@@ -7,6 +7,7 @@ import SecurityTab from './SecurityTab';
 import LessonsTab from './LessonsTab';
 import SubmissionsTab from './SubmissionsTab';
 import UsersTab from './UsersTab';
+import AnalysesTab from './AnalysesTab';
 import { testModelRotation } from '../../utils/gemini';
 
 export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit }) {
@@ -24,10 +25,12 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
     lessons,
     rubrics,
     submissions,
+    analyses,
     toggleAgent,
     deleteAgent,
     createAgent,
     updateAgent,
+    resetPersonasToSeed,
     deleteTranscript,
     upsertLesson,
     deleteLesson,
@@ -42,6 +45,10 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
     assignScenarioToUser,
     setScenarioDifficulty,
     seedDemoData,
+    getApiKeyConfig,
+    setApiKeyConfig,
+    clearApiKey,
+    deleteAnalysis,
   } = firestoreSync;
 
   const pendingCount = (users || []).filter(
@@ -88,6 +95,7 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
 
   const tabs = [
     ['submissions', 'Submissions & Grading'],
+    ['analyses', 'Scenario Analyses'],
     ['users', pendingCount > 0 ? `Users (${pendingCount})` : 'Users'],
     ['transcripts', 'All Transcripts'],
     ['agents', 'Personas'],
@@ -166,6 +174,13 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
               onDeleteSubmission={deleteSubmission}
             />
           )}
+          {tab === 'analyses' && (
+            <AnalysesTab
+              analyses={analyses}
+              lessons={lessons}
+              onDelete={deleteAnalysis}
+            />
+          )}
           {tab === 'users' && (
             <UsersTab
               users={users}
@@ -192,6 +207,7 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
               onDelete={deleteAgent}
               onCreate={createAgent}
               onUpdate={updateAgent}
+              onResetToSeed={resetPersonasToSeed}
             />
           )}
           {tab === 'lessons' && (
@@ -211,6 +227,9 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
               onCreateAdmin={onCreateAdmin}
               onSetRole={setUserRole}
               onRemoveUser={removeUser}
+              onGetApiKeyConfig={getApiKeyConfig}
+              onSetApiKey={setApiKeyConfig}
+              onClearApiKey={clearApiKey}
             />
           )}
         </div>

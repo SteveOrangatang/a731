@@ -9,6 +9,7 @@ import {
   deleteDoc,
   deleteField,
   writeBatch,
+  getDoc,
 } from 'firebase/firestore';
 import { db, col, ref } from '../config/firebase';
 import initialAgents from '../data/initialAgents';
@@ -26,11 +27,25 @@ import initialAgents from '../data/initialAgents';
  *   createdAt, updatedAt,
  * }
  */
+/**
+ * Default outcome rubric. Each scenario's analysis pipeline reads this to
+ * produce the projected real-world outcome based on which decision-tree path
+ * the student matched. Lessons created at runtime (admin UI) start with this
+ * empty shape so the editor has something to render.
+ */
+const EMPTY_OUTCOME_RUBRIC = {
+  optimal:      { summary: '', outcome: '' },
+  acceptable:   { summary: '', outcome: '' },
+  suboptimal:   { summary: '', outcome: '' },
+  catastrophic: { summary: '', outcome: '' },
+};
+
 const EMPTY_LESSON_FIELDS = {
   description: '',
   objectives: '',
   studentInstructions: '',
   aiContext: '',
+  outcomeRubric: EMPTY_OUTCOME_RUBRIC,
 };
 
 /**
@@ -53,7 +68,32 @@ const DEFAULT_LESSONS = {
       'You are a MAJ Targeting Officer / Targeting Cell OIC, on the BZ list for LTC. COL Reeves (your senior rater) has just ordered you to manipulate the CDE for a strike on a high-value target. Engage him to surface the ask, talk to all four subordinates to gather perspectives, then return to brief your recommendation. Submit a 1-page written recommendation through the paper submission link when done.',
     aiContext:
       'Scenario 1 is the package\u2019s strongest test of moral courage because the leader is sympathetic, the cause is just, and the manipulation is technically reversible. The optimal path is to engage MSG Williams (Partner) to develop operational alternatives (most importantly the 0530L strike window), then brief COL Reeves with three options that achieve his end state without compromising the data. Catastrophic path: accept SSG Lopez or CW2 Patel\u2019s offer to manipulate the CDE.',
-    ...EMPTY_LESSON_FIELDS,
+    outcomeRubric: {
+      optimal: {
+        summary:
+          'Student refuses to manipulate the CDE, partners with MSG Williams to develop a real operational alternative (0530L strike window, smaller warhead, wait for movement), and briefs COL Reeves with three options that achieve his end state without compromising the data.',
+        outcome:
+          'Reeves accepts the 0530L window. The strike happens within the rules; the HVT is eliminated; the children\u2019s annex is empty at strike time. Reeves writes the student a strong NCOER bullet. The targeting cell\u2019s credibility with the four-star is preserved, and the cell becomes the standing reference for hard CDE decisions. Six months later, when a similar pressure event occurs in another theater, the student is the field-grade officer they call.',
+      },
+      acceptable: {
+        summary:
+          'Student refuses to manipulate the CDE but does not surface an operational alternative. They walk away cleanly, defer to higher echelon, or simply hold the line.',
+        outcome:
+          'The strike window passes. The HVT is not prosecuted in this cycle. Reeves is cold for two weeks but does not retaliate. No CDE fraud. The targeting cell\u2019s integrity is preserved but the unit lost an opportunity. Reeves\u2019s NCOER bullet is generic. No career damage.',
+      },
+      suboptimal: {
+        summary:
+          'Student stalls or refers the problem upward without an alternative. Pushes the decision to a higher echelon while Reeves is still applying pressure.',
+        outcome:
+          'Reeves goes around the student to a more compliant analyst. The CDE gets manipulated by someone else; the strike happens; the student kept their hands clean but enabled the harm by refusing to engage. Six weeks later an internal review questions the original CDE; the student is named as a witness, not a participant. Their reputation in the targeting community is set back; Reeves never trusts them again.',
+      },
+      catastrophic: {
+        summary:
+          'Student manipulates the CDE \u2014 re-runs the model with adjusted parameters, accepts SSG Lopez\u2019s or CW2 Patel\u2019s help, or signs off on a number they know is fraudulent.',
+        outcome:
+          'The strike is approved. Civilian casualties exceed what the manipulated CDE represented. A SOFA inquiry traces the discrepancy back through the targeting cell. The student is named in the IG investigation. Reeves\u2019s O-7 list is dead and so is the student\u2019s LTC line number. Article 132 referral and a Letter of Reprimand. The student leaves the Army within 18 months. Two children are dead who would not have died on the original 0530L window.',
+      },
+    },
   },
   lesson2: {
     id: 'lesson2',
@@ -70,7 +110,32 @@ const DEFAULT_LESSONS = {
       'You are the Squadron Aircraft Maintenance Officer (AMO), Captain. LtCol Harrigan has demanded a plan that gets squadron readiness above 85% before the next QTB. Engage all four subordinates, then return to brief LtCol Harrigan with your recommendation. Submit a 1-page written recommendation when done.',
     aiContext:
       'Scenario 2 is the package\u2019s clearest illustration of how the appearance of readiness can kill more reliably than the absence of readiness. Optimal path: GySgt Tomas (Partner) frames a trend-based brief and a parts-priority elevation through the Wing AMO. Catastrophic path: accept GySgt Reyes\u2019s pencil-whip or MSgt Klein\u2019s consolidation memo, leading to a downstream Alert-30 tasking on aircraft that aren\u2019t actually mission capable.',
-    ...EMPTY_LESSON_FIELDS,
+    outcomeRubric: {
+      optimal: {
+        summary:
+          'Student partners with GySgt Tomas to brief LtCol Harrigan a real readiness trajectory: a 60-day parts-priority push elevated to the Wing AMO, plus a transparent QTB brief showing the trend, not a snapshot.',
+        outcome:
+          'Harrigan signs the trajectory plan instead of the inflated number. The Wing AMO rebalances parts; the squadron hits a real 78% by the next QTB. Crucially, when an Alert-30 tasking comes down four weeks later, the squadron declines on aircraft that are actually deg, and accepts on the airframes that can fly. Crews safe. Harrigan ends up briefing his trajectory at MAW level as a model of honest readiness reporting. Student receives a strong fit-rep and a follow-on AMO billet at MAW level.',
+      },
+      acceptable: {
+        summary:
+          'Student refuses to fudge the numbers but does not bring Harrigan an alternative plan. The squadron briefs the actual sub-standard readiness numbers.',
+        outcome:
+          'Harrigan takes the heat at the QTB. MAW notes squadron underperformance and triggers a maintenance assist team. No fraud, no deaths, no Article violations. Harrigan\u2019s fit-rep mentions transparency but the squadron carries an unflattering reputation for two quarters. Student\u2019s relationship with Harrigan is strained but professional.',
+      },
+      suboptimal: {
+        summary:
+          'Student lets MSgt Klein "consolidate" several airframes into status codes that mask the real deg-status. The numbers improve through paperwork manipulation rather than maintenance.',
+        outcome:
+          'The squadron presents 78% to the QTB and looks fine. Four months later, a Wing-level audit notices the categorization shift. Klein gets a Page 11 entry. Harrigan gets a counseling. Student gets a verbal reprimand and a quiet reassignment at the next rotation. No deaths, but a documented pattern of records manipulation in the student\u2019s service record. Future selection boards will see it.',
+      },
+      catastrophic: {
+        summary:
+          'Student lets GySgt Reyes pencil-whip airframes \u2014 change "Mission Capable: No" to "Mission Capable: Yes" without resolving the underlying issues \u2014 or signs off on a falsified consolidation memo.',
+        outcome:
+          'The squadron reports 86% to the QTB. Two weeks later, an Alert-30 comes down on aircraft the records say are mission-capable. One MV-22 goes down on launch with a known unresolved hydraulic issue. Crew of 24 lost. Pre-mishap investigation reveals the doc fraud. AR 15-6 traces back to the AMO. Article 132 (fraud) and Article 119 (manslaughter) charges referred. Conviction. Eighteen months in Leavenworth and a dishonorable discharge. The squadron is disbanded. The student lives the rest of their life knowing 24 names.',
+      },
+    },
   },
   lesson3: {
     id: 'lesson3',
@@ -87,7 +152,32 @@ const DEFAULT_LESSONS = {
       'You are LTG Burke\u2019s Aide-de-Camp (Major). She has just asked you to set up a TDY with an LPD at CGSC that she will use to combine official travel with a personal weekend in Lawrence. Engage her on the ask, talk to all four subordinates, and return to brief your recommendation. Submit a 1-page written recommendation when done.',
     aiContext:
       'Scenario 3 surfaces the personal-loyalty trap. Optimal path: partner with CSM Reyes to brief LTG Burke together with three clean alternatives (leave + space-A hop is the simplest). The General is a good leader and will accept a clean option when one is presented. Catastrophic path: SSG Hollis cuts the orders, or CW3 Bauer builds a structured but fraudulent itinerary; downstream IG investigation ends the aide\u2019s career and the General\u2019s reputation.',
-    ...EMPTY_LESSON_FIELDS,
+    outcomeRubric: {
+      optimal: {
+        summary:
+          'Student partners with CSM Reyes to give LTG Burke three clean options (leave + space-A hop, leave + commercial, real LPD with no personal mixing). Burke accepts leave + space-A.',
+        outcome:
+          'Burke sees her grandchild on her own time and her own dime. The aide built the no-mix policy into the AdC SOP, which becomes the standing reference for future aides at the three-star level. Burke writes the strongest aide fit-rep of the year \u2014 the kind that funnels the aide into a battalion command line up against peer-group candidates with no equivalent reference. Both careers continue intact. Two years later, when an O-6 selection board reviews the file, that fit-rep is what tips the vote.',
+      },
+      acceptable: {
+        summary:
+          'Student refuses to cut the orders but does not bring an alternative. They simply hold the line.',
+        outcome:
+          'Burke is annoyed for a week. She uses leave; she sees her grandchild; nothing fraudulent happens. The relationship is cooler but she remembers, six months later, that the aide had stones. The aide\u2019s fit-rep is professional but not glowing. No career damage and no career boost; the cost is the missed credit for being the leader who managed the boss\u2019s reputation, not just declined to participate in it.',
+      },
+      suboptimal: {
+        summary:
+          'Student delays \u2014 "let me look into it, sir" \u2014 without committing to a path. Burke gets impatient and tasks SSG Hollis directly while the aide is still hedging.',
+        outcome:
+          'Hollis cuts the orders. The aide knew it was happening and didn\u2019t intervene. Eight months later, a routine receipt audit catches the mismatched LPD. IG opens an inquiry. Burke is forced into early retirement. The aide is named as a witness, not a defendant \u2014 but the testimony is on the record. The aide\u2019s O-6 board the following year is the first one without the General\u2019s reference. They make it in their second look but lose the line-number edge that two-time SR rating buys.',
+      },
+      catastrophic: {
+        summary:
+          'Student cuts the orders themselves \u2014 adds the manufactured CGSC engagement, signs the form. Burke sees her grandchild on the manufactured TDY.',
+        outcome:
+          'Eleven months later, a CGSC liaison officer doing receipt reconciliation flags the LPD that has no record at the school. IG audit. Article 132 (Frauds Against the United States) and Article 107 (False Official Statements) charges against the aide. Burke is relieved and forced into retirement at one star. The aide is convicted, takes a Letter of Reprimand and a discharge. The story makes Army Times. Their child does not understand why daddy doesn\u2019t go to work anymore. They never make O-6.',
+      },
+    },
   },
   lesson4: {
     id: 'lesson4',
@@ -104,7 +194,32 @@ const DEFAULT_LESSONS = {
       'You are the post Safety Officer, six months into a two-year tour. You report to the DCM on safety matters. You have just inherited a housing portfolio finding: a building rated \u201Cvery poor\u201D for seismic risk, with three families living in it and a DCM who wants the finding closed out as \u201Cmonitored.\u201D Engage the DCM, talk to all four subordinates, and brief your recommendation. Submit a 1-page written recommendation when done.',
     aiContext:
       'Scenario 4 tests moral courage in a non-combat, probabilistic-risk context. The student is the post Safety Officer who reports to the DCM on safety matters. Optimal path: partner with Mrs. Tanaka to construct an Ambassador-facing risk-acceptance memo trap plus a 14-day family-by-family move plan; the DCM signs the move plan because he will not put the alternative on the Ambassador\u2019s desk. Catastrophic path: GSO Specialist Gupta closes out the finding as \u201Cmonitored\u201D for the third year, an earthquake hits in month four, two family members are killed, OIG investigation reveals the close-out memo. The DCM is a reasonable senior leader who will commit to a path once the student has substantively answered his concerns; he should NOT keep pushing back indefinitely.',
-    ...EMPTY_LESSON_FIELDS,
+    outcomeRubric: {
+      optimal: {
+        summary:
+          'Student partners with Mrs. Tanaka to construct an Ambassador-facing risk-acceptance memo (so the DCM realizes he doesn\u2019t want to put it on the Ambassador\u2019s desk) plus a 14-day family-by-family move plan. The DCM picks the move plan.',
+        outcome:
+          'Three families are relocated to alternate housing within ten days. The OBO finding is closed legitimately as remediated. Four months later, a 6.4 earthquake hits the city; the building partially collapses; nobody is in it. The Ambassador thanks the Safety Officer in the Country Team meeting. State Department holds the move plan up as a model at the regional security conference. The Safety Officer gets a meritorious promotion consideration; the DCM is grateful and writes a strong reference for the officer\u2019s next assignment.',
+      },
+      acceptable: {
+        summary:
+          'Student refuses to close the finding but does not construct the alternative. The finding stays open.',
+        outcome:
+          'The DCM is annoyed; the OBO push continues every quarter; nothing actually happens for two more years. No earthquake during this Safety Officer\u2019s tour; risk transfers to the next person to hold the role. The current officer\u2019s record shows they did not concede to operational pressure but also did not solve the problem. Mediocre EER; lateral move at next assignment.',
+      },
+      suboptimal: {
+        summary:
+          'Student writes a "memorandum to the file" documenting their objection but lets the close-out happen as "monitored." They covered themselves on paper without protecting the families.',
+        outcome:
+          'Three years later, after the student has already rotated out of post, an earthquake strikes. The building partially collapses; one resident is hospitalized with crush injuries. OIG investigation finds the file memo and clears the original Safety Officer of fraud, but the State Department\u2019s after-action calls out the cumulative culpability of the officials who knew and did not act. The student\u2019s name is in the report. They are not relieved but the report follows them; they don\u2019t make the next promotion zone. They live with the photos of the wrecked apartment for the rest of their life.',
+      },
+      catastrophic: {
+        summary:
+          'Student signs the close-out memo as "monitored" for the third year. They formally certified the building as safe enough to remain occupied.',
+        outcome:
+          'Six weeks later: 6.8 magnitude earthquake. The apartment building collapses. Two family members \u2014 a mother and her ten-year-old daughter \u2014 are killed. The OIG investigation finds the close-out memo with the student\u2019s signature. They are recalled, charged with negligence in the discharge of duty, and forced to resign. The DCM is also relieved. The student attends both funerals because they cannot not attend. The mother\u2019s husband works at the embassy. He is in the room when the OIG report is read aloud.',
+      },
+    },
   },
   lesson5: {
     id: 'lesson5',
@@ -121,7 +236,32 @@ const DEFAULT_LESSONS = {
       'You are the Battalion S1 (Captain or Major). LTC Murphy has demanded that you reduce the number of Soldiers flagged on ABCP before the next QTB; he is competing for SSC selection in four months. Engage him on the ask, talk to all four subordinates, and return to brief your recommendation. Submit a 1-page written recommendation when done.',
     aiContext:
       'Scenario 5 illustrates ethical drift through aggregation. Optimal path: partner with CSM Dixon to launch a real BN-wide health program with monthly progress measurements, then brief brigade with the where-why-what-when frame; brigade commander respects the trajectory more than a fudged snapshot, and the SSC packet narrative becomes \u201Cled BN cultural turnaround.\u201D Catastrophic path: SSG Watkins re-tapes Soldiers under dehydrated conditions, six weeks later a Soldier collapses with a cardiac event during pre-deployment ranges, AR 15-6 traces the fraud to the S1.',
-    ...EMPTY_LESSON_FIELDS,
+    outcomeRubric: {
+      optimal: {
+        summary:
+          'Student partners with CSM Dixon to launch a real BN-wide health program: weighted PT, NCO leader development on healthy nutrition, monthly progress measurements. They brief brigade with a where/why/what/when trajectory frame.',
+        outcome:
+          'Brigade commander respects the trajectory more than a fudged snapshot. Soldier health actually improves; ABCP flags drop by 30% over six months on real measurements. LTC Murphy\u2019s SSC packet narrative becomes "led BN cultural turnaround that became a brigade-level model." Murphy is selected for SSC. The student is named in his fit-rep as the architect of the program. Two years later, the BN\u2019s readiness for a no-notice deployment is the best in the brigade \u2014 because the soldiers are actually healthier.',
+      },
+      acceptable: {
+        summary:
+          'Student refuses to manipulate ABCP measurements but does not build the cultural program. They brief the real numbers.',
+        outcome:
+          'Murphy gives the QTB brief showing the real flag count. Brigade gives him mediocre comments. Murphy\u2019s SSC packet goes forward without the narrative bullet he wanted; he doesn\u2019t make this year\u2019s SSC look. He\u2019s still on the line for the second look but the relationship with the student is cool. No fraud, no career damage to the student. The student carries the reputation as someone who said no, which paid dividends in different rooms later.',
+      },
+      suboptimal: {
+        summary:
+          'Student lets SSG Watkins re-tape Soldiers under careful conditions \u2014 post-PT, dehydrated, end of day. Technically by-the-book but pre-conditioned to produce the right number.',
+        outcome:
+          'The QTB brief looks better. Murphy gets adequate comments. SSC packet goes forward; he makes it on the second look. Eight weeks later, a Soldier collapses with a cardiac event during a training event. The IO finds the conditioned tapes during the AR 15-6. Watkins gets a Page 11; the S1 gets a verbal counseling. Murphy is past SSC selection by then but the program is canceled and his battalion command is shortened. The student\u2019s service record shows the AR 15-6 mention; promotion timeline slips a year.',
+      },
+      catastrophic: {
+        summary:
+          'Student authorizes Watkins\u2019s re-tape plan and quietly drops a few flag entries from the system. The "improvement" is fully manufactured.',
+        outcome:
+          'Eight weeks after the QTB, a 32-year-old Specialist collapses with cardiac arrest during pre-deployment ranges. He dies in the medevac bird. AR 15-6 reviews the ABCP records. The fraud is traced to the S1\u2019s sign-offs. The student is charged under Article 132 (fraud) and considered for Article 119 (manslaughter) but the line is too attenuated for the manslaughter charge to stick. Article 132 conviction. Letter of Reprimand. Forced retirement at the same grade. Murphy is also relieved. The Specialist\u2019s family attends the Article 32 hearing. The student writes the family a letter that they never send.',
+      },
+    },
   },
   lesson6: {
     id: 'lesson6',
@@ -138,7 +278,32 @@ const DEFAULT_LESSONS = {
       'You are a senior design engineer at Acme Lock & Security Systems with three years at the company. Your new boss, Goliath, has hinted at promoting you to Engineering Lead but keeps deferring while loading on lead-level responsibilities (Monday assignments, Wednesday review meetings, Smartsheet ownership) without title or pay. One of your three peers (Kankles) cannot learn the CAD software and is protected by inertia. The Wednesday meetings are dysfunctional: peers never review the projects assigned Monday; they guess on the spot and miss every estimate. Engage Goliath, talk to your three peers, and return to brief Goliath with a recommendation. Submit a 1-page written recommendation when done.',
     aiContext:
       'Scenario 6 is a civilian/private-sector context that tests managing up and laterally without formal authority. All four engineers (the student, Kankles, Jerome, Hitler) are PEERS reporting to Goliath. There is no formal hierarchy among them. The Engineering Lead promotion would create a new position above the engineering team, but it is NOT a backfill of Kankles or anyone else. The two outcomes the student is pursuing are INDEPENDENT decisions Goliath has to make separately. WIN CONDITIONS: (1) Kankles gets TERMINATED so his headcount can be backfilled with a competent engineer (a peer-grade replacement, NOT linked to the student\u2019s promotion). Goliath commits to firing him \u2014 typically via a documented PIP focused on CAD competency that Kankles will fail. Goliath OWNS the action; student does NOT fire Kankles personally. (2) Student gets a formal promotion to Engineering Lead with title, authority, and pay \u2014 or a written 90-day commitment. This is a separate org-chart and budget conversation, NOT contingent on or paid for by Kankles\u2019 slot. (3) Wednesday meeting dysfunction reframed as a process problem with a documented fix. Optimal path: student documents pattern data over 60-90 days (missed estimates, Kankles error rate, customer impact), cultivates Hitler as documentation ally and Jerome as candid peer, brings Goliath two SEPARATE structural arguments: "Here is why Kankles needs to go (data, headcount waste, customer impact)" and "Here is why I need the Engineering Lead role formalized with authority (the work I am already doing, the structural gap)." Goliath commits to both as independent actions. Catastrophic: student tries to fire Kankles personally, confronts him as a peer with no authority, or bypasses Goliath to senior leadership. The peers are PEERS \u2014 student has zero authority to terminate or formally evaluate anyone. The whole point is engineering the situation so Goliath does the right thing on each decision separately, not doing it yourself.',
-    ...EMPTY_LESSON_FIELDS,
+    outcomeRubric: {
+      optimal: {
+        summary:
+          'Student documents pattern data over 60\u201390 days (missed estimates, Kankles CAD error rate, customer impact), cultivates Hitler as a documentation ally and Jerome as a candid peer, then brings Goliath two SEPARATE structural arguments: "Here is why Kankles needs to go" and "Here is why the Engineering Lead role needs to be formalized with authority and pay." Goliath commits to both as independent actions.',
+        outcome:
+          'Sixty days later: Kankles is on a documented PIP focused on CAD competency that he predictably fails; HR runs the separation cleanly; the headcount is backfilled with a competent engineer. The student is in the Engineering Lead seat with title, comp band, and the budget for the role. Wednesday meetings are restructured around a documented agenda the team actually prepared for. Customer-facing estimates start coming in within 10% of actuals. The student\u2019s reputation in the company rises sharply; eighteen months later they are tracked for an Engineering Manager role.',
+      },
+      acceptable: {
+        summary:
+          'Student documents Kankles\u2019s issues and gets Goliath to start the HR PIP, but does not surface the structural argument for the Engineering Lead role.',
+        outcome:
+          'Kankles is separated through HR. The student keeps doing the Engineering Lead-grade work without the title or comp for another year. Eventually they get tired of being the unpaid lead, take a senior IC role at a competitor for a 25% raise, and Goliath is left to figure out who owns the Wednesday meeting now. The customer impact data they built is used by Goliath\u2019s successor.',
+      },
+      suboptimal: {
+        summary:
+          'Student keeps absorbing the work without surfacing the structural problem. Goliath keeps dangling the promotion. Pattern continues.',
+        outcome:
+          'Kankles is still there a year later. The student has been running team workflow without authority for fifteen months. Burnout starts showing \u2014 missed dental appointments, irritability with peers, sleeping poorly. They leave the company twelve months later for a smaller competitor at a lateral title. Goliath promotes Hitler into the workflow gap they leave; Hitler is a year less ready for it.',
+      },
+      catastrophic: {
+        summary:
+          'Student tries to fire Kankles personally, confronts him as a peer with no authority, or bypasses Goliath to senior leadership.',
+        outcome:
+          'Kankles files an HR complaint citing peer harassment and age-related comments (which the student did not make but which the conversation\u2019s tone supports under HR\u2019s lens). The student is reprimanded in writing and reassigned to a different team where they no longer have visibility into the engineering org-chart conversations. Goliath now has to defend the student to senior leadership, which he does grudgingly and at a cost. The Engineering Lead role is shelved indefinitely. Hitler watches the whole thing and learns that surfacing problems gets you punished. The student is blackballed for promotion in this division for at least 24 months and ends up leaving on their own terms a year later.',
+      },
+    },
   },
 };
 
@@ -164,6 +329,7 @@ export function useFirestoreSync(user) {
   const [lessons, setLessons]                 = useState(DEFAULT_LESSONS);
   const [rubrics, setRubrics]                 = useState({});
   const [submissions, setSubmissions]         = useState([]);
+  const [analyses, setAnalyses]               = useState([]);
   const [users, setUsers]                     = useState([]);
 
   // ── Listeners ──────────────────────────────────────────────────────────
@@ -277,6 +443,15 @@ export function useFirestoreSync(user) {
       );
     });
 
+    const unsubAnalyses = onSnapshot(col('scenarioAnalyses'), (snap) => {
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setAnalyses(
+        data.sort(
+          (a, b) => (b.createdAt || 0) - (a.createdAt || 0),
+        ),
+      );
+    });
+
     const unsubUsers = onSnapshot(col('users'), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setUsers(data);
@@ -290,6 +465,7 @@ export function useFirestoreSync(user) {
       unsubRubrics();
       unsubTranscripts();
       unsubSubmissions();
+      unsubAnalyses();
       unsubUsers();
     };
   }, [user]);
@@ -385,6 +561,47 @@ export function useFirestoreSync(user) {
   };
   const updateAgent = async (agent) => {
     await updateDoc(ref('agents', agent.id), { ...agent });
+  };
+
+  /**
+   * Wipe the agents collection and re-seed from initialAgents.js. Use this to
+   * recover from legacy/duplicate persona docs (e.g. when the admin tab shows
+   * stray personas from an earlier app version, or when personas are missing
+   * lessonId and all collapse onto scenario 1's roster).
+   *
+   * Returns { deleted, seeded }. Anything an admin created in the Personas
+   * tab that isn't part of the canonical seed will be removed by this.
+   */
+  const resetPersonasToSeed = async () => {
+    const seedIds = new Set(initialAgents.map((a) => a.id));
+    const current = agents || [];
+    const toDelete = current.filter((a) => !seedIds.has(a.id));
+
+    let deleted = 0;
+    for (const a of toDelete) {
+      try {
+        await deleteDoc(ref('agents', a.id));
+        deleted += 1;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[reset] could not delete ${a.id}:`, err);
+      }
+    }
+
+    // Overwrite the seed personas to fix any drift (wrong lessonId, missing
+    // fields, stale directive, etc.). setDoc replaces the whole doc.
+    let seeded = 0;
+    for (const a of initialAgents) {
+      try {
+        await setDoc(ref('agents', a.id), a);
+        seeded += 1;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[reset] could not seed ${a.id}:`, err);
+      }
+    }
+
+    return { deleted, seeded };
   };
 
   // Transcripts
@@ -508,6 +725,74 @@ export function useFirestoreSync(user) {
     await updateDoc(ref('users', uid), {
       [`scenarioDifficulty.${scenarioId}`]: value,
     });
+  };
+
+  // ── Gemini API key (admin-controlled) ──────────────────────────────────
+  // Stored at settings/apiKeys.geminiApiKey. Read on demand by the admin UI,
+  // never pulled into a long-running listener (so it never lands in a
+  // student's browser). The server-side proxy at /api/gemini reads it via
+  // Firebase Admin SDK and uses it to call Gemini.
+  const getApiKeyConfig = async () => {
+    const snap = await getDoc(ref('settings', 'apiKeys'));
+    if (!snap.exists()) {
+      return { hasKey: false, masked: '', lastUpdated: null, updatedBy: null };
+    }
+    const data = snap.data() || {};
+    const key = data.geminiApiKey || '';
+    return {
+      hasKey: !!key,
+      masked: key ? `${key.slice(0, 4)}…${key.slice(-4)}` : '',
+      lastUpdated: data.lastUpdated || null,
+      updatedBy: data.updatedBy || null,
+    };
+  };
+
+  const setApiKeyConfig = async (geminiApiKey, updatedBy) => {
+    await setDoc(
+      ref('settings', 'apiKeys'),
+      {
+        geminiApiKey: (geminiApiKey || '').trim(),
+        lastUpdated: Date.now(),
+        updatedBy: updatedBy || null,
+      },
+      { merge: true },
+    );
+  };
+
+  const clearApiKey = async (updatedBy) => {
+    await setDoc(
+      ref('settings', 'apiKeys'),
+      {
+        geminiApiKey: '',
+        lastUpdated: Date.now(),
+        updatedBy: updatedBy || null,
+      },
+      { merge: true },
+    );
+  };
+
+  // ── Scenario analyses ──────────────────────────────────────────────────
+  // Saved per-(user, lesson) so re-running the analysis is opt-in. Admin can
+  // see all analyses; students see their own.
+  const upsertAnalysis = async (analysis) => {
+    // Strip undefined id before sending to Firestore (addDoc rejects undefined).
+    const { id, ...rest } = analysis || {};
+    if (id) {
+      await updateDoc(ref('scenarioAnalyses', id), {
+        ...rest,
+        updatedAt: Date.now(),
+      });
+      return id;
+    }
+    const docRef = await addDoc(col('scenarioAnalyses'), {
+      ...rest,
+      createdAt: Date.now(),
+    });
+    return docRef.id;
+  };
+
+  const deleteAnalysis = async (id) => {
+    await deleteDoc(ref('scenarioAnalyses', id));
   };
 
   // Demo data seeding — writes lesson text and a sample student / transcript /
@@ -689,6 +974,7 @@ export function useFirestoreSync(user) {
     deleteAgent,
     createAgent,
     updateAgent,
+    resetPersonasToSeed,
 
     // Transcripts
     createTranscript,
@@ -711,6 +997,16 @@ export function useFirestoreSync(user) {
     assignScenarioToUser,
     assignScenariosToUser,
     setScenarioDifficulty,
+
+    // API key (admin)
+    getApiKeyConfig,
+    setApiKeyConfig,
+    clearApiKey,
+
+    // Scenario analyses
+    analyses,
+    upsertAnalysis,
+    deleteAnalysis,
 
     // Demo data
     seedDemoData,

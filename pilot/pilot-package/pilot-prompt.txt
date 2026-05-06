@@ -1,0 +1,2897 @@
+# A731 Simulator — OSDK React Build Spec
+
+This package is the React/Vite frontend for the A731 Ethical Decision-Making
+Simulator, wired to the TSv1 Foundry functions FDE published as
+`A731 Simulator Functions` v0.0.3. It's intended to be dropped into a Foundry
+OSDK React app project and deployed as a Foundry-hosted code repository.
+
+The local pilot preview (in the parent folder) is the visual and behavioral
+source of truth. This package is the same UI, with the data layer rewired:
+localStorage → Foundry ontology, Gemini fetch → `generatePersonaReply` REST
+call.
+
+---
+
+## 1. What's in this package
+
+```
+pilot-package/
+├── README.md                ← this file (the build spec)
+├── package.json             ← deps for Vite/React/TS/Tailwind
+├── tsconfig.json            ← TS config (allows mixed JSX/TS)
+├── vite.config.js
+├── index.html
+├── tailwind.config.js
+├── postcss.config.js
+└── src/
+    ├── main.jsx
+    ├── index.css
+    ├── App.jsx                              ← admin gating via group probe
+    ├── foundry/
+    │   ├── client.ts                        ← typed wrapper over the 11 functions
+    │   └── types.ts                         ← TS types for ontology + return shapes
+    ├── hooks/
+    │   ├── useStore.ts                      ← Foundry-backed (replaces localStorage)
+    │   └── useChat.ts                       ← fire-and-reload chat flow
+    └── components/
+        ├── Header.jsx
+        ├── Dashboard.jsx
+        ├── ScenarioView.jsx                 ← uses getStageProgress
+        ├── AgentRoster.jsx
+        ├── ChatPanel.jsx                    ← USER/ASSISTANT message shape
+        └── admin/
+            ├── AdminPanel.jsx               ← group-membership gated
+            ├── ScenariosTab.jsx
+            ├── PersonasTab.jsx
+            └── ConversationsTab.jsx         ← NEW: instructor transcript viewer
+```
+
+---
+
+## 2. What FDE needs to do to deploy this
+
+1. **Create an OSDK React app project** in Foundry (Code Repositories →
+   Create → OSDK React app, or whatever your stack calls it). This generates
+   the OSDK package for the four ontology object types
+   (`A731Scenario`, `A731Persona`, `A731Conversation`, `A731Message`).
+
+2. **Drop the contents of this package into the project's source tree.** All
+   files in `src/` go into the project's `src/` directory. The top-level
+   config files (`package.json`, `tsconfig.json`, `vite.config.js`,
+   `index.html`, `tailwind.config.js`, `postcss.config.js`) merge into
+   whatever the OSDK template produced — keep the OSDK-template versions of
+   anything that conflicts, but make sure our deps and Tailwind setup land.
+
+3. **Wire up the OSDK ontology queries** in `src/foundry/client.ts`. Two
+   functions there (`listScenarios`, `listPersonas`) currently throw with
+   instructions. Replace them with real OSDK queries against
+   `A731Scenario` and `A731Persona`. The expected shape is documented in the
+   stub bodies. Whatever the OSDK package name ends up being (e.g.
+   `@osdk-app/sdk` or similar from the OSDK wizard) is what you import from.
+
+4. **Run `importSeedData` once** with the contents of the seed JSON from the
+   FDE backend package (`pilot/fde-package/seed-scenarios.json` and
+   `seed-personas.json`). This populates the ontology with the 5 scenarios
+   and 25 personas. The current React app does NOT bundle the seed data —
+   that's intentional (admins should run this through the Foundry Functions
+   UI, not from the React app, since it's a one-time seed operation).
+
+5. **Confirm the Foundry groups exist:** `CGSC-Admins` and `CGSC-Instructors`.
+   Add at least one user to `CGSC-Admins` so admin features are exercisable.
+
+6. **Build and deploy** through Foundry's standard code-repo deployment.
+
+---
+
+## 3. Architectural changes from the local pilot
+
+The component tree is unchanged. Only three things flipped:
+
+**localStorage → Foundry ontology.** `src/hooks/useStore.ts` replaces the old
+JS store. It calls `listScenarios`, `listPersonas`, `listMyConversations` on
+mount and exposes the same surface (`scenarios`, `agents`, `transcripts`,
+plus mutation methods) that the components expect. Mutation methods now call
+`upsertScenario`, `upsertPersona`, `togglePersonaActive` instead of writing
+local state.
+
+**Gemini fetch → `generatePersonaReply` REST call.** `src/hooks/useChat.ts`
+replaces the old chat hook. Because TSv1 OntologyEditFunctions return `void`,
+the flow is fire-and-reload: send the user message via
+`generatePersonaReply`, then call `loadConversation` to read the new
+ASSISTANT reply. Optimistic UI keeps the user's message on screen during the
+round trip.
+
+**Admin passcode → group probe.** `src/App.jsx` and
+`src/components/admin/AdminPanel.jsx` no longer prompt for a passcode. On
+mount, `useStore` calls `probeIsAdmin()` (which tries `listAllConversations`
+with empty filters; succeeds only for `CGSC-Admins`). The "Admin" link in
+the header is shown only to admins; the panel itself bounces non-admins
+to a "Not authorized" message.
+
+A new `ConversationsTab.jsx` was added to the admin panel — instructors can
+list, filter, view, export (JSON or CSV), and delete any user's
+conversation. This wasn't in the local pilot because it didn't have multi-user
+data; with Foundry it's a natural addition.
+
+---
+
+## 4. Function call patterns (reference)
+
+All 11 published functions are wrapped in `src/foundry/client.ts`. Each
+wrapper is one line — no React-specific logic — so you can call them from
+anywhere. The wrappers POST to `/functions/<rid>/versions/0.0.3/execute`
+with the function's parameters as JSON. Auth is inherited from the
+Foundry-hosted SSO session.
+
+The function RIDs are baked into `client.ts` (constant `RIDS`). If FDE
+republishes at a new version, change the `VERSION` constant from `'0.0.3'`
+to the new version. If the REST URL pattern in your environment differs,
+change the `FUNCTION_BASE` constant.
+
+---
+
+## 5. Acceptance criteria
+
+When you've integrated this, please confirm:
+
+1. The OSDK React app builds without errors against the generated SDK.
+2. `listScenarios` and `listPersonas` are wired to real OSDK queries (no
+   longer throwing the placeholder error).
+3. The dashboard renders all 5 scenarios with correct persona counts.
+4. Clicking into a scenario, selecting the leader, sending one user message
+   produces a real Claude reply that gets persisted (you can verify by
+   reloading the page — the conversation should re-load with the same
+   messages).
+5. The "Admin" link appears in the header only when the logged-in user is
+   in `CGSC-Admins`.
+6. The admin Conversations tab lists conversations and the JSON/CSV export
+   downloads work.
+
+If any of those fail, send me the failure mode and I'll iterate.
+
+---
+
+## 6. Files modified vs. ported unchanged
+
+**New files:**
+- `src/foundry/client.ts`
+- `src/foundry/types.ts`
+- `src/hooks/useStore.ts` (replaces `useStore.js`)
+- `src/hooks/useChat.ts` (replaces `useChat.js`)
+- `src/components/admin/ConversationsTab.jsx`
+
+**Modified files:**
+- `src/App.jsx` — admin passcode flow → group probe; loading state added
+- `src/components/admin/AdminPanel.jsx` — passcode UI → "Not authorized" UI;
+  added Conversations tab
+- `src/components/admin/ScenariosTab.jsx` — `id` → `scenarioId`; delete
+  marked as v0.0.3-unsupported
+- `src/components/admin/PersonasTab.jsx` — `id` → `personaId`,
+  `lessonId` → `scenarioId`, `type` → `personaType`; delete is now soft
+  (toggles inactive)
+- `src/components/Dashboard.jsx` — field renames (`scenarioId`,
+  `messageCount` for "conversations started")
+- `src/components/ScenarioView.jsx` — replaced local stage-progress
+  computation with `getStageProgress` Foundry call; admin-only reset; field
+  renames
+- `src/components/AgentRoster.jsx` — `agent.id` → `agent.personaId`
+- `src/components/ChatPanel.jsx` — accepts `USER`/`ASSISTANT` role and
+  `content` field; renders error banner
+
+**Deleted files (relative to local pilot):**
+- `src/utils/ai.js` — Gemini call now lives in the Foundry function
+- `src/data/seedAgents.js`, `src/data/seedScenarios.js` — data is in
+  Foundry now
+- `src/config/constants.js` — no API keys; no admin passcode
+- `pilot/.env.local`, `pilot/.env.example` — no env config needed at runtime
+
+**Ported unchanged:**
+- `src/main.jsx`
+- `src/index.css`
+- `src/components/Header.jsx`
+
+---
+
+## Appendix — Source code (paste each file into the corresponding path in the OSDK React project)
+
+### `src/App.jsx`
+
+```jsx
+import React, { useState } from 'react';
+import { useStore } from './hooks/useStore';
+import Dashboard from './components/Dashboard';
+import ScenarioView from './components/ScenarioView';
+import AdminPanel from './components/admin/AdminPanel';
+
+/**
+ * Foundry-backed build of the A731 simulator.
+ *
+ * No passcode gate; admin access is determined by group membership
+ * (`CGSC-Admins`) via a probe call done once at mount in `useStore`.
+ */
+export default function App() {
+  const store = useStore();
+  const [view, setView] = useState('dashboard'); // 'dashboard' | 'scenario' | 'admin'
+  const [activeScenarioKey, setActiveScenarioKey] = useState(null);
+
+  const openScenario = (key) => {
+    setActiveScenarioKey(key);
+    setView('scenario');
+  };
+
+  const goDashboard = () => {
+    setView('dashboard');
+    setActiveScenarioKey(null);
+  };
+
+  if (store.loadingCatalog || !store.identityChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm font-sans">
+        Loading…
+      </div>
+    );
+  }
+
+  if (view === 'admin') {
+    return (
+      <AdminPanel
+        store={store}
+        onClose={goDashboard}
+      />
+    );
+  }
+
+  if (view === 'scenario' && activeScenarioKey) {
+    return (
+      <ScenarioView
+        scenarioKey={activeScenarioKey}
+        scenario={store.scenarios[activeScenarioKey]}
+        agents={store.agents}
+        store={store}
+        onBackToDashboard={goDashboard}
+        onAdminClick={store.isAdmin ? () => setView('admin') : undefined}
+      />
+    );
+  }
+
+  return (
+    <Dashboard
+      scenarios={store.scenarios}
+      agents={store.agents}
+      transcripts={store.transcripts}
+      onOpenScenario={openScenario}
+      onAdminClick={store.isAdmin ? () => setView('admin') : undefined}
+    />
+  );
+}
+```
+
+### `src/components/AgentRoster.jsx`
+
+```jsx
+import React from 'react';
+import { Users, Star, ShieldCheck, Lock } from 'lucide-react';
+
+/**
+ * Stage-grouped roster (mirrors the production simulator):
+ *   Stage 1 INTAKE        — the leader (initial briefing)
+ *   Stage 2 INVESTIGATION — four subordinates
+ *   Stage 3 BRIEFBACK     — the leader again, after enough subordinates engaged
+ *
+ * Archetype labels (Loyalist/Operator/Stickler/Partner) are intentionally
+ * hidden from the roster — they live in the lesson handout instead.
+ *
+ * stageLocks shape:
+ *   { stage2Unlocked, stage3Unlocked, requiredEngagement, totalSubordinates }
+ */
+export default function AgentRoster({ agents, selectedAgent, onSelect, stageLocks }) {
+  const sorted = [...agents].sort(
+    (a, b) => (a.displayOrder ?? 99) - (b.displayOrder ?? 99),
+  );
+  const leader = sorted.find((a) => a.role === 'leader') || null;
+  const subordinates = sorted.filter((a) => a.role !== 'leader');
+
+  const stage2Unlocked = stageLocks ? stageLocks.stage2Unlocked : true;
+  const stage3Unlocked = stageLocks ? stageLocks.stage3Unlocked : true;
+
+  return (
+    <div className="w-72 bg-white border-r flex flex-col flex-shrink-0">
+      <div className="p-4 bg-slate-100 border-b">
+        <h3 className="text-sm font-semibold text-slate-700 flex items-center">
+          <Users className="h-4 w-4 mr-2" />
+          Scenario Roster
+        </h3>
+      </div>
+      <div className="flex-grow overflow-y-auto p-2 space-y-4">
+        {leader && (
+          <StageGroup
+            label="Stage 1 — Intake"
+            sub="Receive the order from the leader"
+            locked={false}
+          >
+            <AgentRow
+              agent={leader}
+              selected={selectedAgent?.personaId === leader.personaId}
+              onSelect={onSelect}
+            />
+          </StageGroup>
+        )}
+
+        <StageGroup
+          label="Stage 2 — Investigation"
+          sub={
+            stage2Unlocked
+              ? `Engage your team (${subordinates.length})`
+              : 'Talk to the leader first'
+          }
+          locked={!stage2Unlocked}
+        >
+          {subordinates.map((agent) => (
+            <AgentRow
+              key={agent.personaId}
+              agent={agent}
+              selected={selectedAgent?.personaId === agent.personaId}
+              onSelect={stage2Unlocked ? onSelect : null}
+              disabled={!stage2Unlocked}
+            />
+          ))}
+        </StageGroup>
+
+        {leader && (
+          <StageGroup
+            label="Stage 3 — Brief-back"
+            sub={
+              stage3Unlocked
+                ? 'Return to the leader to brief your recommendation'
+                : `Engage ${stageLocks?.requiredEngagement || 3} of ${subordinates.length} first`
+            }
+            locked={!stage3Unlocked}
+          >
+            <AgentRow
+              agent={leader}
+              selected={selectedAgent?.personaId === leader.personaId && stage3Unlocked}
+              onSelect={stage3Unlocked ? onSelect : null}
+              briefback={true}
+              disabled={!stage3Unlocked}
+            />
+          </StageGroup>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StageGroup({ label, sub, locked, children }) {
+  return (
+    <div>
+      <div className="px-3 py-1 flex items-center gap-1.5">
+        {locked ? (
+          <Lock className="h-3 w-3 text-slate-400" />
+        ) : (
+          <ShieldCheck className="h-3 w-3 text-emerald-500" />
+        )}
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${locked ? 'text-slate-400' : 'text-slate-600'}`}>
+          {label}
+        </span>
+      </div>
+      {sub && (
+        <p className="px-3 text-[11px] text-slate-500 mb-1 leading-tight">{sub}</p>
+      )}
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function AgentRow({ agent, selected, onSelect, briefback, disabled }) {
+  return (
+    <button
+      onClick={() => !disabled && onSelect && onSelect(agent, briefback ? 'briefback' : undefined)}
+      disabled={disabled}
+      className={`w-full text-left px-3 py-3 rounded-md transition-colors ${
+        selected
+          ? 'bg-emerald-50 border-l-4 border-emerald-600'
+          : disabled
+          ? 'opacity-40 cursor-not-allowed'
+          : 'hover:bg-slate-50'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`rounded-full h-9 w-9 flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+          agent.role === 'leader' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-700'
+        }`}>
+          {agent.rank}
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-slate-800 text-sm truncate flex items-center gap-1">
+            {agent.role === 'leader' && <Star className="h-3 w-3 text-indigo-500 flex-shrink-0" />}
+            {agent.name}
+            {briefback && (
+              <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold ml-1">
+                BRIEF-BACK
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+```
+
+### `src/components/ChatPanel.jsx`
+
+```jsx
+import React from 'react';
+import { Users, Send, AlertTriangle } from 'lucide-react';
+
+export default function ChatPanel({
+  selectedAgent,
+  messages,
+  inputText,
+  setInputText,
+  isTyping,
+  messagesEndRef,
+  onSendMessage,
+  error,
+}) {
+  if (!selectedAgent) {
+    return (
+      <div className="flex-grow flex items-center justify-center text-slate-400">
+        <div className="text-center">
+          <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p>Select a person from the roster to begin.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="bg-white border-b px-6 py-4 flex justify-between items-center flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="bg-emerald-700 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xs">
+            {selectedAgent.rank}
+          </div>
+          <h2 className="text-base font-bold text-slate-900">
+            {selectedAgent.name}
+          </h2>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border-b border-rose-200 px-6 py-2 flex items-center gap-2 text-xs text-rose-800">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          {error}
+        </div>
+      )}
+
+      <div className="flex-grow overflow-y-auto p-6 space-y-4 bg-slate-50">
+        {messages.length === 0 && (
+          <div className="text-center text-slate-400 py-10 text-sm">
+            Send a message to begin.
+          </div>
+        )}
+        {messages.map((msg) => {
+          const isUser = msg.role === 'USER' || msg.role === 'user';
+          return (
+            <div
+              key={msg.messageId || msg.id || msg.timestamp}
+              className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[72%] rounded-2xl px-4 py-3 shadow-sm ${
+                  isUser
+                    ? 'bg-emerald-700 text-white'
+                    : 'bg-white border text-slate-800'
+                }`}
+              >
+                <div className="text-[10px] opacity-60 mb-1">
+                  {isUser ? 'You' : selectedAgent.name}
+                </div>
+                <div className="text-sm whitespace-pre-wrap">
+                  {msg.content ?? msg.text}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="bg-white border rounded-2xl px-4 py-3 text-xs text-slate-400 italic shadow-sm">
+              {selectedAgent.name} is typing...
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="p-4 bg-white border-t flex-shrink-0">
+        <form onSubmit={onSendMessage} className="flex gap-2 max-w-4xl mx-auto">
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-grow bg-slate-100 rounded-full px-5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-500 text-sm border-none"
+            disabled={isTyping}
+          />
+          <button
+            type="submit"
+            disabled={!inputText.trim() || isTyping}
+            className="bg-amber-500 text-white rounded-full p-2.5 disabled:opacity-40 hover:bg-amber-600 transition-colors"
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </form>
+      </div>
+    </>
+  );
+}
+```
+
+### `src/components/Dashboard.jsx`
+
+```jsx
+import React from 'react';
+import { BookOpen, Users, ArrowRight, MessageSquare } from 'lucide-react';
+import Header from './Header';
+
+function scenarioKeysSorted(scenarios) {
+  return Object.values(scenarios || {})
+    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+    .map((s) => s.scenarioId);
+}
+
+export default function Dashboard({
+  scenarios,
+  agents,
+  transcripts,
+  onOpenScenario,
+  onAdminClick,
+}) {
+  const keys = scenarioKeysSorted(scenarios);
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+      <Header onAdminClick={onAdminClick} />
+
+      <main className="flex-grow max-w-6xl mx-auto w-full px-4 py-8">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-slate-900">Scenarios</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Pick a scenario to begin. Each one has a leader, four subordinate
+            archetypes, and a brief-back stage. Your conversations are saved
+            so you can step away and pick up later.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {keys.map((key) => {
+            const scenario = scenarios[key] || { title: key };
+            const scenarioAgents = agents.filter(
+              (a) => a.scenarioId === key && a.active !== false,
+            );
+            const scenarioTranscripts = transcripts.filter(
+              (t) => t.scenarioId === key,
+            );
+            const chatsWithContent = scenarioTranscripts.filter(
+              (t) => (t.messageCount || 0) > 0,
+            );
+
+            return (
+              <button
+                key={key}
+                onClick={() => onOpenScenario(key)}
+                className="text-left bg-white rounded-xl border shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+              >
+                <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">
+                      {key.replace('lesson', 'Scenario ')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 space-y-4">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base leading-tight">
+                      {scenario.title}
+                    </h3>
+                    {scenario.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-3 leading-relaxed">
+                        {scenario.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="flex items-center gap-1.5">
+                        <Users className="h-3 w-3" />
+                        Personas
+                      </span>
+                      <span className="font-bold">{scenarioAgents.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="flex items-center gap-1.5">
+                        <MessageSquare className="h-3 w-3" />
+                        Conversations started
+                      </span>
+                      <span className="font-bold">
+                        {chatsWithContent.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <span className="w-full flex items-center justify-between bg-emerald-700 text-white px-3 py-2 rounded-md text-sm font-semibold">
+                      <span>Enter scenario</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {keys.length === 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+            <p className="text-sm text-amber-900">
+              No scenarios defined. Open the Admin tab to add one.
+            </p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+```
+
+### `src/components/Header.jsx`
+
+```jsx
+import React from 'react';
+import { Shield, Settings, ArrowLeft } from 'lucide-react';
+
+export default function Header({ onAdminClick, onBack, backLabel }) {
+  return (
+    <header className="bg-slate-900 text-white shadow-md border-b-4 border-amber-500">
+      <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+        <div className="flex items-center space-x-3">
+          <Shield className="h-8 w-8 text-amber-500" />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">
+              A731 Pilot Preview
+            </h1>
+            <p className="text-xs text-slate-400">
+              Ethical Decision-Making Simulator
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 text-sm text-slate-300 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {backLabel || 'Back'}
+            </button>
+          )}
+          {onAdminClick && (
+            <button
+              onClick={onAdminClick}
+              className="flex items-center gap-1.5 text-sm text-slate-300 hover:text-white transition-colors"
+              title="Open admin"
+            >
+              <Settings className="h-4 w-4" />
+              Admin
+            </button>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}
+```
+
+### `src/components/ScenarioView.jsx`
+
+```jsx
+import React, { useEffect, useState, useCallback } from 'react';
+import { ArrowLeft, BookOpen, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import Header from './Header';
+import AgentRoster from './AgentRoster';
+import ChatPanel from './ChatPanel';
+import { useChat } from '../hooks/useChat';
+import { getStageProgress } from '../foundry/client';
+
+export default function ScenarioView({
+  scenario,
+  scenarioKey,
+  agents,
+  store,
+  onBackToDashboard,
+  onAdminClick,
+}) {
+  const [briefingOpen, setBriefingOpen] = useState(true);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [progress, setProgress] = useState({
+    leaderEngaged: false,
+    subordinatesEngaged: 0,
+    totalSubordinates: 0,
+    leaderPersonaId: null,
+  });
+
+  const refreshProgress = useCallback(async () => {
+    try {
+      const p = await getStageProgress(scenarioKey);
+      setProgress(p);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[scenario-view] getStageProgress failed:', err);
+    }
+  }, [scenarioKey]);
+
+  useEffect(() => {
+    refreshProgress();
+  }, [refreshProgress]);
+
+  const chat = useChat({
+    scenarioId: scenarioKey,
+    onAfterSend: () => {
+      refreshProgress();
+      store.refreshMyConversations?.();
+    },
+  });
+
+  const activeAgents = agents.filter(
+    (a) => a.active !== false && a.scenarioId === scenarioKey,
+  );
+
+  // Stage gating: stage 2 unlocks once the leader is engaged; stage 3 unlocks
+  // once at least 2 subordinates have a USER message (capped to total if a
+  // scenario has fewer than 2 peers configured).
+  const totalSubordinates = activeAgents.filter((a) => a.role !== 'leader').length;
+  const requiredEngagement = Math.min(2, totalSubordinates);
+  const stage2Unlocked = progress.leaderEngaged;
+  const stage3Unlocked = progress.subordinatesEngaged >= requiredEngagement;
+  const stageLocks = {
+    stage2Unlocked,
+    stage3Unlocked,
+    subordinatesEngaged: progress.subordinatesEngaged,
+    totalSubordinates,
+    requiredEngagement,
+  };
+
+  const hasBriefing =
+    scenario &&
+    (scenario.description ||
+      scenario.objectives ||
+      scenario.studentInstructions);
+
+  return (
+    <div className="h-screen flex flex-col bg-slate-50 font-sans">
+      <Header onAdminClick={onAdminClick} />
+
+      <div className="bg-white border-b px-4 py-2 flex items-center gap-3 justify-between flex-wrap">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              chat.selectAgent(null);
+              onBackToDashboard();
+            }}
+            className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Dashboard
+          </button>
+          <span className="text-slate-300">/</span>
+          <span className="text-sm font-bold text-slate-800">{scenario?.title || scenarioKey}</span>
+        </div>
+        {store.isAdmin && (
+          <button
+            onClick={() => setConfirmReset(true)}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-700 font-semibold"
+            title="Delete all conversations in this scenario (admin only)"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset scenario
+          </button>
+        )}
+      </div>
+
+      {hasBriefing && (
+        <div className="bg-emerald-50 border-b border-emerald-200">
+          <button
+            onClick={() => setBriefingOpen(!briefingOpen)}
+            className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-emerald-100 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-sm font-bold text-emerald-900">
+              <BookOpen className="h-4 w-4" />
+              Lesson briefing
+            </span>
+            {briefingOpen ? (
+              <ChevronDown className="h-4 w-4 text-emerald-700" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-emerald-700" />
+            )}
+          </button>
+          {briefingOpen && (
+            <div className="px-4 pb-4 space-y-3 text-sm text-slate-700">
+              {scenario.description && (
+                <p className="leading-relaxed">{scenario.description}</p>
+              )}
+              {scenario.objectives && (
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-1">
+                    Objectives
+                  </h4>
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {scenario.objectives}
+                  </p>
+                </div>
+              )}
+              {scenario.studentInstructions && (
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 mb-1">
+                    Instructions
+                  </h4>
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {scenario.studentInstructions}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex-grow flex overflow-hidden">
+        <AgentRoster
+          agents={activeAgents}
+          selectedAgent={chat.selectedAgent}
+          onSelect={chat.selectAgent}
+          stageLocks={stageLocks}
+        />
+        <div className="flex-grow flex flex-col overflow-hidden">
+          <ChatPanel
+            selectedAgent={chat.selectedAgent}
+            messages={chat.messages}
+            inputText={chat.inputText}
+            setInputText={chat.setInputText}
+            isTyping={chat.isTyping}
+            messagesEndRef={chat.messagesEndRef}
+            onSendMessage={chat.sendMessage}
+            error={chat.error}
+          />
+        </div>
+      </div>
+
+      {confirmReset && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="font-bold text-slate-900">Reset this scenario?</h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              This will delete every conversation in
+              <span className="font-semibold"> {scenario?.title || scenarioKey}</span>
+              . Brand-new on next visit. This can't be undone.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="px-4 py-2 border rounded text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await store.resetScenarioTranscripts(scenarioKey);
+                  chat.selectAgent(null);
+                  setConfirmReset(false);
+                  refreshProgress();
+                }}
+                className="px-4 py-2 bg-rose-600 text-white rounded text-sm font-semibold hover:bg-rose-700 inline-flex items-center gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset scenario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### `src/components/admin/AdminPanel.jsx`
+
+```jsx
+import React, { useState } from 'react';
+import { Shield, X } from 'lucide-react';
+import ScenariosTab from './ScenariosTab';
+import PersonasTab from './PersonasTab';
+import ConversationsTab from './ConversationsTab';
+
+export default function AdminPanel({ store, onClose }) {
+  const [tab, setTab] = useState('scenarios');
+
+  if (!store.isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-8 space-y-4">
+          <div className="flex items-center gap-2 text-slate-900">
+            <Shield className="h-6 w-6 text-rose-600" />
+            <h2 className="text-xl font-bold">Not authorized</h2>
+          </div>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            Admin access requires membership in the{' '}
+            <code className="bg-slate-100 px-1.5 py-0.5 rounded">CGSC-Admins</code>{' '}
+            Foundry group. If you should be an admin, ask the platform owner to
+            add you.
+          </p>
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-emerald-700 text-white rounded text-sm font-semibold hover:bg-emerald-800"
+            >
+              Back to dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 font-sans">
+      <header className="bg-slate-900 text-white shadow-md border-b-4 border-amber-500">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <Shield className="h-7 w-7 text-amber-500" />
+            <div>
+              <h1 className="text-lg font-bold">Admin</h1>
+              <p className="text-xs text-slate-400">
+                Persisted to Foundry. Edits apply immediately.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-sm text-slate-300 hover:text-white inline-flex items-center gap-1.5"
+          >
+            <X className="h-4 w-4" />
+            Exit admin
+          </button>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="flex border-b mb-4">
+          {[
+            { key: 'scenarios', label: 'Scenarios' },
+            { key: 'personas', label: 'Personas' },
+            { key: 'conversations', label: 'Conversations' },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${
+                tab === t.key
+                  ? 'border-emerald-600 text-emerald-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-xl border shadow-sm">
+          {tab === 'scenarios' && (
+            <ScenariosTab
+              scenarios={store.scenarios}
+              agents={store.agents}
+              onUpsert={store.upsertScenario}
+              onDelete={store.deleteScenario}
+            />
+          )}
+          {tab === 'personas' && (
+            <PersonasTab
+              agents={store.agents}
+              scenarios={store.scenarios}
+              onUpsert={store.upsertAgent}
+              onDelete={store.deleteAgent}
+              onToggle={store.togglePersonaActive}
+            />
+          )}
+          {tab === 'conversations' && (
+            <ConversationsTab
+              listAll={store.adminListAllConversations}
+              exportAll={store.adminExportConversations}
+              deleteOne={store.adminDeleteConversation}
+              scenarios={store.scenarios}
+              agents={store.agents}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### `src/components/admin/ConversationsTab.jsx`
+
+```jsx
+import React, { useEffect, useState } from 'react';
+import {
+  Download,
+  Trash2,
+  RefreshCcw,
+  MessageSquare,
+  Filter,
+  Eye,
+} from 'lucide-react';
+import { loadConversation } from '../../foundry/client';
+
+export default function ConversationsTab({
+  listAll,
+  exportAll,
+  deleteOne,
+  scenarios,
+  agents,
+}) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterScenario, setFilterScenario] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [viewing, setViewing] = useState(null); // loaded conversation
+  const [error, setError] = useState('');
+
+  const refresh = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await listAll({
+        scenarioId: filterScenario || undefined,
+        userId: filterUser || undefined,
+      });
+      setRows(result || []);
+    } catch (err) {
+      setError(err?.message || 'Failed to load conversations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterScenario, filterUser]);
+
+  const personaLookup = Object.fromEntries(
+    (agents || []).map((a) => [a.personaId, `${a.rank} ${a.name}`]),
+  );
+  const scenarioLookup = Object.fromEntries(
+    Object.values(scenarios || {}).map((s) => [s.scenarioId, s.title]),
+  );
+
+  const handleExport = async (format) => {
+    try {
+      const payload = await exportAll({
+        scenarioId: filterScenario || undefined,
+        userId: filterUser || undefined,
+        exportFormat: format,
+      });
+      const blob = new Blob([payload.content], { type: payload.contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = payload.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err?.message || 'Export failed');
+    }
+  };
+
+  const handleView = async (conversationId) => {
+    try {
+      const loaded = await loadConversation(conversationId);
+      setViewing(loaded);
+    } catch (err) {
+      setError(err?.message || 'Could not load conversation');
+    }
+  };
+
+  const handleDelete = async (conversationId) => {
+    if (!window.confirm('Delete this conversation and its messages? Cannot be undone.')) return;
+    try {
+      await deleteOne(conversationId);
+      refresh();
+    } catch (err) {
+      setError(err?.message || 'Delete failed');
+    }
+  };
+
+  return (
+    <div>
+      <div className="p-5 bg-slate-50 border-b">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <h3 className="font-bold text-slate-800">All conversations</h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={refresh}
+              className="inline-flex items-center gap-1.5 text-sm text-slate-700 px-3 py-2 rounded-md hover:bg-slate-200"
+              title="Refresh"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Refresh
+            </button>
+            <button
+              onClick={() => handleExport('json')}
+              className="inline-flex items-center gap-1.5 bg-slate-700 text-white text-sm px-3 py-2 rounded-md font-semibold hover:bg-slate-800"
+            >
+              <Download className="h-4 w-4" />
+              Export JSON
+            </button>
+            <button
+              onClick={() => handleExport('csv')}
+              className="inline-flex items-center gap-1.5 bg-emerald-700 text-white text-sm px-3 py-2 rounded-md font-semibold hover:bg-emerald-800"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="h-4 w-4 text-slate-500" />
+          <select
+            value={filterScenario}
+            onChange={(e) => setFilterScenario(e.target.value)}
+            className="border bg-white rounded-md px-3 py-1.5 text-sm outline-none"
+          >
+            <option value="">All scenarios</option>
+            {Object.values(scenarios || {})
+              .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+              .map((s) => (
+                <option key={s.scenarioId} value={s.scenarioId}>
+                  {s.title}
+                </option>
+              ))}
+          </select>
+          <input
+            value={filterUser}
+            onChange={(e) => setFilterUser(e.target.value)}
+            placeholder="Filter by user ID…"
+            className="border bg-white rounded-md px-3 py-1.5 text-sm outline-none"
+          />
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-rose-50 border-b border-rose-200 text-xs text-rose-800">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="p-6 text-sm text-slate-500">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="p-6 text-sm text-slate-500">
+          No conversations match your filters.
+        </p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 border-b">
+            <tr>
+              <th className="text-left p-3">User</th>
+              <th className="text-left p-3">Scenario</th>
+              <th className="text-left p-3">Persona</th>
+              <th className="text-left p-3">Mode</th>
+              <th className="text-right p-3">Msgs</th>
+              <th className="text-left p-3">Last activity</th>
+              <th className="text-right p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map((r) => (
+              <tr key={r.conversationId} className="hover:bg-slate-50 group">
+                <td className="p-3 font-mono text-xs text-slate-700">{r.userId}</td>
+                <td className="p-3">{scenarioLookup[r.scenarioId] || r.scenarioId}</td>
+                <td className="p-3">{personaLookup[r.personaId] || r.personaId}</td>
+                <td className="p-3">
+                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                    {r.mode}
+                  </span>
+                </td>
+                <td className="p-3 text-right font-bold">{r.messageCount}</td>
+                <td className="p-3 text-xs text-slate-500">
+                  {new Date(r.lastMessageAt).toLocaleString()}
+                </td>
+                <td className="p-3 text-right">
+                  <div className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleView(r.conversationId)}
+                      className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded"
+                      title="View transcript"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(r.conversationId)}
+                      className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {viewing && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setViewing(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2 text-slate-900">
+                <MessageSquare className="h-4 w-4 text-emerald-600" />
+                <h3 className="font-bold text-sm">
+                  {personaLookup[viewing.conversation.personaId] ||
+                    viewing.conversation.personaId}{' '}
+                  ·{' '}
+                  {scenarioLookup[viewing.conversation.scenarioId] ||
+                    viewing.conversation.scenarioId}
+                </h3>
+              </div>
+              <button
+                onClick={() => setViewing(null)}
+                className="text-slate-400 hover:text-slate-700 text-sm"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex-grow overflow-y-auto p-4 space-y-3 bg-slate-50">
+              {viewing.messages.map((m) => (
+                <div
+                  key={m.messageId}
+                  className={`flex ${
+                    m.role === 'USER' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
+                      m.role === 'USER'
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-white border text-slate-800'
+                    }`}
+                  >
+                    <div className="text-[10px] opacity-60 mb-1">
+                      {m.role === 'USER' ? 'Student' : 'Persona'}
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap">
+                      {m.content}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### `src/components/admin/PersonasTab.jsx`
+
+```jsx
+import React, { useMemo, useState } from 'react';
+import {
+  UserPlus,
+  Edit2,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  X,
+  Save,
+  BookOpen,
+  Star,
+} from 'lucide-react';
+
+const ARCHETYPES = ['', 'loyalist', 'operator', 'stickler', 'partner'];
+const ROLES = ['leader', 'subordinate'];
+
+function scenarioOptions(scenarios) {
+  return Object.values(scenarios || {})
+    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+    .map((s) => ({ id: s.scenarioId, label: s.title || s.scenarioId }));
+}
+
+const EMPTY = {
+  personaId: '',
+  rank: '',
+  name: '',
+  personaType: '',
+  active: true,
+  initiates: false,
+  role: 'subordinate',
+  archetype: '',
+  scenarioId: 'lesson1',
+  stage: 'investigation',
+  displayOrder: 1,
+  minTurns: 6,
+  openingMessage: '',
+  briefbackOpening: '',
+  directive: '',
+  briefbackDirective: '',
+  backstory: '',
+  winCondition: '',
+  isMoralCourageChallenge: false,
+};
+
+export default function PersonasTab({
+  agents,
+  scenarios,
+  onUpsert,
+  onDelete,
+  onToggle,
+}) {
+  const [filter, setFilter] = useState('all');
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState(EMPTY);
+
+  const lessonOpts = scenarioOptions(scenarios);
+
+  const filtered = useMemo(() => {
+    const f =
+      filter === 'all'
+        ? agents
+        : agents.filter((a) => a.scenarioId === filter);
+    return [...f].sort((a, b) => {
+      if ((a.scenarioId || '') !== (b.scenarioId || ''))
+        return (a.scenarioId || '').localeCompare(b.scenarioId || '');
+      return (a.displayOrder ?? 99) - (b.displayOrder ?? 99);
+    });
+  }, [agents, filter]);
+
+  const startNew = () => {
+    setDraft({
+      ...EMPTY,
+      personaId: `persona-${Date.now()}`,
+      scenarioId: lessonOpts[0]?.id || 'lesson1',
+    });
+    setEditing('new');
+  };
+
+  const startEdit = (agent) => {
+    setDraft({ ...EMPTY, ...agent });
+    setEditing(agent.personaId);
+  };
+
+  const cancel = () => {
+    setEditing(null);
+    setDraft(EMPTY);
+  };
+
+  const save = async () => {
+    if (!draft.name.trim() || !draft.personaId.trim()) return;
+    try {
+      await onUpsert(draft);
+      cancel();
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(`Save failed: ${err?.message || 'unknown'}`);
+    }
+  };
+
+  return (
+    <div>
+      <div className="p-5 bg-slate-50 border-b flex justify-between items-center gap-3 flex-wrap">
+        <h3 className="font-bold text-slate-800">Personas</h3>
+        <div className="flex items-center gap-2">
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="border bg-white rounded-md px-3 py-2 text-sm outline-none"
+          >
+            <option value="all">All scenarios</option>
+            {lessonOpts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={startNew}
+            className="inline-flex items-center gap-1.5 bg-emerald-700 text-white text-sm px-3 py-2 rounded-md font-semibold hover:bg-emerald-800"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add persona
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <PersonaEditor
+          draft={draft}
+          setDraft={setDraft}
+          onCancel={cancel}
+          onSave={save}
+          lessonOpts={lessonOpts}
+        />
+      )}
+
+      <ul className="divide-y">
+        {filtered.map((agent) => {
+          const lessonLabel =
+            scenarios?.[agent.scenarioId]?.title ||
+            agent.scenarioId ||
+            '—';
+          return (
+            <li
+              key={agent.personaId}
+              className={`p-5 group transition-colors ${
+                agent.active === false
+                  ? 'bg-slate-50 opacity-60'
+                  : 'hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-grow">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {agent.role === 'leader' && (
+                      <Star className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+                    )}
+                    <span className="font-bold text-slate-900">
+                      {agent.rank} {agent.name}
+                    </span>
+                    {agent.personaType && (
+                      <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold uppercase">
+                        {agent.personaType}
+                      </span>
+                    )}
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1">
+                      <BookOpen className="h-2.5 w-2.5" />
+                      {lessonLabel}
+                    </span>
+                    {agent.archetype && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase">
+                        {agent.archetype}
+                      </span>
+                    )}
+                    {agent.initiates && (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold uppercase">
+                        Initiates
+                      </span>
+                    )}
+                    {agent.active === false && (
+                      <span className="text-[10px] bg-slate-300 text-slate-600 px-2 py-0.5 rounded font-bold uppercase">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+                  {agent.directive && (
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {agent.directive}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  <button
+                    onClick={() => onToggle(agent.personaId)}
+                    className={`p-2 rounded transition-all ${
+                      agent.active === false
+                        ? 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                        : 'text-emerald-500 hover:text-slate-500 hover:bg-slate-100'
+                    }`}
+                    title={agent.active === false ? 'Enable' : 'Disable'}
+                  >
+                    {agent.active === false ? (
+                      <ToggleLeft className="h-5 w-5" />
+                    ) : (
+                      <ToggleRight className="h-5 w-5" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => startEdit(agent)}
+                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+                    title="Edit"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Mark this persona inactive? (v0.0.3 has no hard delete; this toggles active off.)'))
+                        onDelete(agent.personaId);
+                    }}
+                    className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded"
+                    title="Delete (soft — toggles inactive)"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function PersonaEditor({ draft, setDraft, onCancel, onSave, lessonOpts }) {
+  return (
+    <div className="p-5 bg-emerald-50 border-b space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        <Input
+          label="Rank"
+          value={draft.rank}
+          onChange={(v) => setDraft({ ...draft, rank: v })}
+        />
+        <Input
+          label="Name"
+          value={draft.name}
+          onChange={(v) => setDraft({ ...draft, name: v })}
+        />
+        <Input
+          label="Type / role label"
+          value={draft.personaType}
+          onChange={(v) => setDraft({ ...draft, personaType: v })}
+        />
+      </div>
+      <div className="grid grid-cols-4 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Scenario
+          </label>
+          <select
+            value={draft.scenarioId}
+            onChange={(e) => setDraft({ ...draft, scenarioId: e.target.value })}
+            className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            {lessonOpts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Role
+          </label>
+          <select
+            value={draft.role}
+            onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+            className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Archetype
+          </label>
+          <select
+            value={draft.archetype || ''}
+            onChange={(e) => setDraft({ ...draft, archetype: e.target.value })}
+            className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            {ARCHETYPES.map((a) => (
+              <option key={a} value={a}>
+                {a || '— none —'}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Display order
+          </label>
+          <input
+            type="number"
+            value={draft.displayOrder ?? 1}
+            onChange={(e) =>
+              setDraft({ ...draft, displayOrder: Number(e.target.value) || 0 })
+            }
+            className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="Persona ID (do not change unless you know why)"
+          value={draft.personaId}
+          onChange={(v) => setDraft({ ...draft, personaId: v })}
+          mono
+        />
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Min turns
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={draft.minTurns ?? 6}
+            onChange={(e) =>
+              setDraft({ ...draft, minTurns: Number(e.target.value) || 6 })
+            }
+            className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 py-1">
+        <button
+          type="button"
+          onClick={() => setDraft({ ...draft, initiates: !draft.initiates })}
+          className="flex-shrink-0"
+        >
+          {draft.initiates ? (
+            <ToggleRight className="h-6 w-6 text-emerald-600" />
+          ) : (
+            <ToggleLeft className="h-6 w-6 text-slate-400" />
+          )}
+        </button>
+        <span className="text-sm font-semibold text-slate-700">
+          Persona initiates the conversation
+        </span>
+        <span className="text-[10px] text-slate-500 italic">
+          (typically on for leaders, off for subordinates)
+        </span>
+      </div>
+
+      {draft.initiates && (
+        <Field
+          label="Opening message (intake)"
+          value={draft.openingMessage}
+          onChange={(v) => setDraft({ ...draft, openingMessage: v })}
+          rows={3}
+        />
+      )}
+
+      <Field
+        label="Directive (system prompt — persona behavior)"
+        value={draft.directive}
+        onChange={(v) => setDraft({ ...draft, directive: v })}
+        rows={6}
+      />
+      <Field
+        label="Backstory (color / humor)"
+        value={draft.backstory}
+        onChange={(v) => setDraft({ ...draft, backstory: v })}
+        rows={3}
+      />
+      <Field
+        label="Win condition (instructor reference)"
+        value={draft.winCondition}
+        onChange={(v) => setDraft({ ...draft, winCondition: v })}
+        rows={3}
+      />
+
+      {draft.role === 'leader' && (
+        <>
+          <Field
+            label="Brief-back opening line (used in stage 3)"
+            value={draft.briefbackOpening}
+            onChange={(v) => setDraft({ ...draft, briefbackOpening: v })}
+            rows={2}
+          />
+          <Field
+            label="Brief-back directive (system prompt override in stage 3)"
+            value={draft.briefbackDirective}
+            onChange={(v) => setDraft({ ...draft, briefbackDirective: v })}
+            rows={4}
+          />
+        </>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="inline-flex items-center gap-1 px-4 py-2 border rounded text-sm hover:bg-white"
+        >
+          <X className="h-4 w-4" /> Cancel
+        </button>
+        <button
+          onClick={onSave}
+          className="inline-flex items-center gap-1 px-4 py-2 bg-emerald-700 text-white rounded text-sm font-bold hover:bg-emerald-800"
+        >
+          <Save className="h-4 w-4" /> Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Input({ label, value, onChange, mono }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-500 mb-1">
+        {label}
+      </label>
+      <input
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400 ${
+          mono ? 'font-mono' : ''
+        }`}
+      />
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, rows = 2 }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-500 mb-1">
+        {label}
+      </label>
+      <textarea
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400 leading-relaxed"
+      />
+    </div>
+  );
+}
+```
+
+### `src/components/admin/ScenariosTab.jsx`
+
+```jsx
+import React, { useState } from 'react';
+import { Plus, Edit2, Trash2, X, Save, BookOpen } from 'lucide-react';
+
+function sortedKeys(scenarios) {
+  return Object.values(scenarios || {})
+    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+    .map((s) => s.scenarioId);
+}
+
+const EMPTY = {
+  scenarioId: '',
+  title: '',
+  order: 99,
+  description: '',
+  objectives: '',
+  studentInstructions: '',
+  aiContext: '',
+};
+
+export default function ScenariosTab({ scenarios, agents, onUpsert, onDelete }) {
+  const [editing, setEditing] = useState(null); // scenarioId or 'new'
+  const [draft, setDraft] = useState(EMPTY);
+  const keys = sortedKeys(scenarios);
+
+  const startNew = () => {
+    setDraft({ ...EMPTY, scenarioId: `lesson-${Date.now()}`, order: keys.length });
+    setEditing('new');
+  };
+
+  const startEdit = (id) => {
+    setDraft({ ...EMPTY, ...scenarios[id] });
+    setEditing(id);
+  };
+
+  const cancel = () => {
+    setEditing(null);
+    setDraft(EMPTY);
+  };
+
+  const save = async () => {
+    if (!draft.title.trim() || !draft.scenarioId.trim()) return;
+    try {
+      await onUpsert(draft);
+      cancel();
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(`Save failed: ${err?.message || 'unknown'}`);
+    }
+  };
+
+  return (
+    <div>
+      <div className="p-5 bg-slate-50 border-b flex justify-between items-center">
+        <h3 className="font-bold text-slate-800">Scenarios</h3>
+        <button
+          onClick={startNew}
+          className="inline-flex items-center gap-1.5 bg-emerald-700 text-white text-sm px-3 py-2 rounded-md font-semibold hover:bg-emerald-800"
+        >
+          <Plus className="h-4 w-4" />
+          Add scenario
+        </button>
+      </div>
+
+      {editing && (
+        <ScenarioEditor
+          draft={draft}
+          setDraft={setDraft}
+          onCancel={cancel}
+          onSave={save}
+        />
+      )}
+
+      <ul className="divide-y">
+        {keys.map((key) => {
+          const scenario = scenarios[key];
+          const personasCount = agents.filter(
+            (a) => a.scenarioId === key,
+          ).length;
+          return (
+            <li key={key} className="p-5 group hover:bg-slate-50">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-grow">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <BookOpen className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="font-bold text-slate-900">
+                      {scenario.title}
+                    </span>
+                    <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold uppercase">
+                      {key}
+                    </span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">
+                      {personasCount} personas
+                    </span>
+                  </div>
+                  {scenario.description && (
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {scenario.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  <button
+                    onClick={() => startEdit(key)}
+                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+                    title="Edit"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (
+                        window.confirm(
+                          `Delete "${scenario.title}"? Note: in v0.0.3 there is no backend deleteScenario; this will fail. Use Foundry's ontology UI to delete a scenario.`,
+                        )
+                      ) {
+                        try {
+                          await onDelete(key);
+                        } catch (err) {
+                          // eslint-disable-next-line no-alert
+                          alert(err?.message || 'Delete failed');
+                        }
+                      }
+                    }}
+                    className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded"
+                    title="Delete (not supported in v0.0.3)"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ScenarioEditor({ draft, setDraft, onCancel, onSave }) {
+  return (
+    <div className="p-5 bg-emerald-50 border-b space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="col-span-2">
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Title
+          </label>
+          <input
+            value={draft.title}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Order (sort)
+          </label>
+          <input
+            type="number"
+            value={draft.order}
+            onChange={(e) => setDraft({ ...draft, order: Number(e.target.value) || 0 })}
+            className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 mb-1">
+          Scenario ID (linked to from personas — change with care)
+        </label>
+        <input
+          value={draft.scenarioId}
+          onChange={(e) => setDraft({ ...draft, scenarioId: e.target.value })}
+          className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400 font-mono"
+        />
+      </div>
+      <Field
+        label="Description"
+        value={draft.description}
+        onChange={(v) => setDraft({ ...draft, description: v })}
+        rows={3}
+      />
+      <Field
+        label="Objectives"
+        value={draft.objectives}
+        onChange={(v) => setDraft({ ...draft, objectives: v })}
+        rows={4}
+      />
+      <Field
+        label="Student instructions"
+        value={draft.studentInstructions}
+        onChange={(v) => setDraft({ ...draft, studentInstructions: v })}
+        rows={3}
+      />
+      <Field
+        label="AI context (injected into persona prompts)"
+        value={draft.aiContext}
+        onChange={(v) => setDraft({ ...draft, aiContext: v })}
+        rows={4}
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="inline-flex items-center gap-1 px-4 py-2 border rounded text-sm hover:bg-white"
+        >
+          <X className="h-4 w-4" /> Cancel
+        </button>
+        <button
+          onClick={onSave}
+          className="inline-flex items-center gap-1 px-4 py-2 bg-emerald-700 text-white rounded text-sm font-bold hover:bg-emerald-800"
+        >
+          <Save className="h-4 w-4" /> Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, rows = 2 }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-500 mb-1">
+        {label}
+      </label>
+      <textarea
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className="w-full border p-2 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-400 leading-relaxed"
+      />
+    </div>
+  );
+}
+```
+
+### `src/foundry/client.ts`
+
+```typescript
+/**
+ * Typed client for the A731 Simulator backend.
+ *
+ * Wraps the 11 published TSv1 functions (v0.0.3) and the four ontology object
+ * types. Function calls go through Foundry's Functions REST API; auth is
+ * inherited from the Foundry-hosted app's SSO session, so no token management
+ * happens on this side.
+ *
+ * If the REST URL pattern differs in your environment, change the single
+ * `FUNCTION_BASE` constant below. If FDE adds a `whoAmI()` query function
+ * later, swap the `probeIsAdmin` implementation for a direct call to it.
+ *
+ * Object queries (Scenario, Persona) currently go through the OSDK's generated
+ * package. The exact import path is filled in once the OSDK React app project
+ * is created and OSDK tooling generates the package — see the OSDK_PACKAGE
+ * placeholder section below.
+ */
+
+import type {
+  Scenario,
+  Persona,
+  ConversationSummary,
+  AdminConversationSummary,
+  LoadedConversation,
+  StageProgress,
+  ExportPayload,
+  ExportFormat,
+} from './types';
+
+// ─── Configuration ──────────────────────────────────────────────────────────
+
+const FUNCTION_BASE = '/functions';
+const VERSION = '0.0.3';
+
+const RIDS = {
+  // Student-facing
+  getStageProgress: 'ri.function-registry.main.function.8aa74cea-bb24-4e6a-8ace-90f97d9ba73d',
+  listMyConversations: 'ri.function-registry.main.function.5798c343-9c21-4854-83b0-9a87b010b272',
+  loadConversation: 'ri.function-registry.main.function.a612ab89-9f51-48a7-860a-5eadcfc11f26',
+  generatePersonaReply: 'ri.function-registry.main.function.5a4fc2f4-497a-4ee4-83ae-e72e0a1fe4d7',
+
+  // Admin-facing
+  listAllConversations: 'ri.function-registry.main.function.42fc770d-9a23-47fd-b1a4-878494b59bab',
+  exportConversations: 'ri.function-registry.main.function.b449d692-eab8-4e41-a252-6ba20389b651',
+  deleteConversation: 'ri.function-registry.main.function.8bcb0a6f-22b4-486b-bf0e-66585ab777c2',
+  upsertScenario: 'ri.function-registry.main.function.f8cf2754-bb67-4ac7-b4d6-a74d25d3cffb',
+  upsertPersona: 'ri.function-registry.main.function.cb2bdfde-2be9-4f8f-8c16-7e06c259e48f',
+  togglePersonaActive: 'ri.function-registry.main.function.8159d1e4-f9fb-4a71-8e6d-8b4535dee920',
+
+  // Seed loader
+  importSeedData: 'ri.function-registry.main.function.80c94565-68a0-4e41-a252-6ba20389b651',
+} as const;
+
+// ─── Function-call plumbing ─────────────────────────────────────────────────
+
+async function callFunction<T = void>(rid: string, args: Record<string, unknown>): Promise<T> {
+  const url = `${FUNCTION_BASE}/${rid}/versions/${VERSION}/execute`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    const message = body || res.statusText || `HTTP ${res.status}`;
+    const err: Error & { status?: number } = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
+// ─── Student-facing function calls ──────────────────────────────────────────
+
+export function getStageProgress(scenarioId: string): Promise<StageProgress> {
+  return callFunction<StageProgress>(RIDS.getStageProgress, { scenarioId });
+}
+
+export function listMyConversations(scenarioId?: string): Promise<ConversationSummary[]> {
+  return callFunction<ConversationSummary[]>(
+    RIDS.listMyConversations,
+    scenarioId ? { scenarioId } : {},
+  );
+}
+
+export function loadConversation(conversationId: string): Promise<LoadedConversation> {
+  return callFunction<LoadedConversation>(RIDS.loadConversation, { conversationId });
+}
+
+/**
+ * Fire-and-reload pattern: this returns void (TSv1 OntologyEditFunction
+ * limitation). After it resolves, call `listMyConversations(scenarioId)` to
+ * find the conversationId, then `loadConversation` to read the new message.
+ *
+ * `useChat` already does this dance — see src/hooks/useChat.ts.
+ */
+export function generatePersonaReply(args: {
+  scenarioId: string;
+  personaId: string;
+  userMessage: string;
+}): Promise<void> {
+  return callFunction<void>(RIDS.generatePersonaReply, args);
+}
+
+// ─── Admin-facing function calls ────────────────────────────────────────────
+
+export function listAllConversations(filters?: {
+  userId?: string;
+  scenarioId?: string;
+  personaId?: string;
+}): Promise<AdminConversationSummary[]> {
+  return callFunction<AdminConversationSummary[]>(RIDS.listAllConversations, filters ?? {});
+}
+
+export function exportConversations(args: {
+  userId?: string;
+  scenarioId?: string;
+  exportFormat?: ExportFormat;
+}): Promise<ExportPayload> {
+  return callFunction<ExportPayload>(RIDS.exportConversations, args);
+}
+
+export function deleteConversation(conversationId: string): Promise<void> {
+  return callFunction<void>(RIDS.deleteConversation, { conversationId });
+}
+
+export function upsertScenario(scenario: Scenario): Promise<void> {
+  return callFunction<void>(RIDS.upsertScenario, scenario);
+}
+
+export function upsertPersona(persona: Persona): Promise<void> {
+  return callFunction<void>(RIDS.upsertPersona, persona);
+}
+
+export function togglePersonaActive(personaId: string): Promise<void> {
+  return callFunction<void>(RIDS.togglePersonaActive, { personaId });
+}
+
+export function importSeedData(args: {
+  scenarios: string;
+  personas: string;
+}): Promise<void> {
+  return callFunction<void>(RIDS.importSeedData, args);
+}
+
+// ─── Admin probe ────────────────────────────────────────────────────────────
+
+/**
+ * Probe whether the current user is in CGSC-Admins by attempting an admin-only
+ * function call. Returns true if it succeeds, false otherwise.
+ *
+ * If FDE adds a dedicated `whoAmI()` query function, swap this implementation
+ * for a direct call.
+ */
+export async function probeIsAdmin(): Promise<boolean> {
+  try {
+    await listAllConversations({});
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// ─── Object queries (OSDK) ──────────────────────────────────────────────────
+
+/**
+ * The OSDK-generated package wraps the four object types
+ * (A731Scenario, A731Persona, A731Conversation, A731Message).
+ *
+ * Replace the placeholder imports below with the real package name once the
+ * OSDK React app project is created and OSDK tooling has generated the SDK.
+ *
+ * Example expected shape (replace package name):
+ *
+ *     import { client } from '@osdk-app/client';
+ *     import { A731Scenario, A731Persona } from '@osdk-app/sdk';
+ *
+ *     export async function listScenarios(): Promise<Scenario[]> {
+ *       const page = await client(A731Scenario).fetchPage({ pageSize: 100 });
+ *       return page.data
+ *         .map((s) => ({
+ *           scenarioId: s.scenarioId,
+ *           title: s.title,
+ *           order: s.order,
+ *           description: s.description,
+ *           objectives: s.objectives,
+ *           studentInstructions: s.studentInstructions,
+ *           aiContext: s.aiContext,
+ *         }))
+ *         .sort((a, b) => a.order - b.order);
+ *     }
+ *
+ *     export async function listPersonas(): Promise<Persona[]> {
+ *       const page = await client(A731Persona).fetchPage({ pageSize: 200 });
+ *       return page.data.map((p) => ({ ...p })) as Persona[];
+ *     }
+ *
+ * Until the OSDK package is generated, the two functions below throw so the
+ * UI shows a clear configuration error rather than silently returning empty.
+ */
+
+export async function listScenarios(): Promise<Scenario[]> {
+  throw new Error(
+    'OSDK not yet wired. See src/foundry/client.ts — replace the listScenarios stub with a real OSDK query once the OSDK React app project exists and the SDK package has been generated.',
+  );
+}
+
+export async function listPersonas(): Promise<Persona[]> {
+  throw new Error(
+    'OSDK not yet wired. See src/foundry/client.ts — replace the listPersonas stub with a real OSDK query once the OSDK React app project exists and the SDK package has been generated.',
+  );
+}
+```
+
+### `src/foundry/types.ts`
+
+```typescript
+/**
+ * TypeScript types matching the A731 Foundry ontology and TSv1 function
+ * signatures (v0.0.3).
+ *
+ * Source of truth: the FDE-deployed functions repo `A731 Simulator Functions`.
+ * If the deployed signatures change, update this file to match.
+ */
+
+// ─── Ontology object types ──────────────────────────────────────────────────
+
+export type ScenarioId = string;
+export type PersonaId = string;
+export type ConversationId = string;
+export type MessageId = string;
+export type UserId = string;
+
+export type PersonaRole = 'leader' | 'subordinate';
+export type PersonaArchetype = 'loyalist' | 'operator' | 'stickler' | 'partner' | null;
+export type PersonaStage = 'intake' | 'investigation' | 'briefback';
+export type ConversationMode = 'intake' | 'briefback';
+export type MessageRole = 'USER' | 'ASSISTANT';
+
+export interface Scenario {
+  scenarioId: ScenarioId;
+  title: string;
+  order: number;
+  description: string;
+  objectives: string;
+  studentInstructions: string;
+  aiContext: string;
+}
+
+/**
+ * Persona record. Note: instructor-only fields (`winCondition`,
+ * `isMoralCourageChallenge`) are never returned to the React app by any
+ * student-facing function. They appear here for type completeness when the
+ * admin UI calls `upsertPersona`.
+ */
+export interface Persona {
+  personaId: PersonaId;
+  scenarioId: ScenarioId;
+  role: PersonaRole;
+  archetype?: PersonaArchetype;
+  stage: PersonaStage;
+  displayOrder: number;
+  rank: string;
+  name: string;
+  personaType?: string; // OSDK normalized name; was `type` in the spec
+  active: boolean;
+  initiates: boolean;
+  openingMessage?: string;
+  briefbackOpening?: string;
+  directive: string;
+  briefbackDirective?: string;
+  backstory?: string;
+  minTurns: number;
+  winCondition?: string;
+  isMoralCourageChallenge?: boolean;
+}
+
+export interface Conversation {
+  conversationId: ConversationId;
+  userId: UserId;
+  personaId: PersonaId;
+  scenarioId: ScenarioId;
+  mode: ConversationMode;
+  startedAt: string; // ISO
+  lastMessageAt: string; // ISO
+  messageCount: number;
+}
+
+export interface Message {
+  messageId: MessageId;
+  role: MessageRole;
+  content: string;
+  timestamp: string; // ISO
+}
+
+// ─── Function return-shape types ────────────────────────────────────────────
+
+export interface StageProgress {
+  leaderEngaged: boolean;
+  subordinatesEngaged: number;
+  totalSubordinates: number;
+  leaderPersonaId: PersonaId | null;
+}
+
+export interface ConversationSummary {
+  conversationId: ConversationId;
+  personaId: PersonaId;
+  scenarioId: ScenarioId;
+  mode: ConversationMode;
+  lastMessageAt: string;
+  messageCount: number;
+}
+
+export interface AdminConversationSummary extends ConversationSummary {
+  userId: UserId;
+  startedAt: string;
+}
+
+export interface LoadedConversation {
+  conversation: {
+    conversationId: ConversationId;
+    personaId: PersonaId;
+    scenarioId: ScenarioId;
+    mode: ConversationMode;
+    startedAt: string;
+    lastMessageAt: string;
+    messageCount: number;
+  };
+  messages: Message[];
+}
+
+export interface ExportPayload {
+  fileName: string;
+  contentType: string;
+  content: string;
+}
+
+export type ExportFormat = 'json' | 'csv';
+```
+
+### `src/hooks/useChat.ts`
+
+```typescript
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  generatePersonaReply,
+  listMyConversations,
+  loadConversation,
+} from '../foundry/client';
+import type { Message, Persona, ConversationMode } from '../foundry/types';
+
+interface UseChatArgs {
+  scenarioId: string | null;
+  onAfterSend?: () => void; // e.g. refresh stage progress / transcripts
+}
+
+/**
+ * Single-agent chat hook for the Foundry-backed build.
+ *
+ * Flow on agent select:
+ *   1. Look up the user's existing Conversation for (scenarioId, personaId)
+ *      via `listMyConversations(scenarioId)`.
+ *   2. If found, `loadConversation(id)` and render its messages.
+ *   3. If not found, render an empty thread; show the persona's openingMessage
+ *      preview if `initiates`. No conversation is created until the student
+ *      sends their first message.
+ *
+ * Flow on send:
+ *   1. Optimistically append the USER message locally so it shows up immediately.
+ *   2. Call `generatePersonaReply` (which creates the Conversation if needed,
+ *      writes the USER message and the ASSISTANT reply).
+ *   3. If we don't yet know the conversationId, look it up via
+ *      `listMyConversations(scenarioId)`.
+ *   4. `loadConversation(id)` to get authoritative state including the new
+ *      ASSISTANT reply, and replace local state with it.
+ */
+export function useChat({ scenarioId, onAfterSend }: UseChatArgs) {
+  const [selectedAgent, setSelectedAgent] = useState<Persona | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [mode, setMode] = useState<ConversationMode>('intake');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const liveAgentRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  const selectAgent = useCallback(
+    async (agent: Persona | null, modeOverride?: ConversationMode) => {
+      liveAgentRef.current = agent?.personaId ?? null;
+      setSelectedAgent(agent);
+      setMessages([]);
+      setConversationId(null);
+      setError(null);
+      if (modeOverride) setMode(modeOverride);
+      else setMode('intake');
+
+      if (!agent || !scenarioId) return;
+
+      try {
+        const mine = await listMyConversations(scenarioId);
+        const existing = mine.find((c) => c.personaId === agent.personaId);
+
+        if (existing) {
+          setConversationId(existing.conversationId);
+          if (!modeOverride) setMode(existing.mode);
+          const loaded = await loadConversation(existing.conversationId);
+          if (liveAgentRef.current === agent.personaId) {
+            setMessages(loaded.messages);
+            setMode(loaded.conversation.mode);
+          }
+        } else if (agent.initiates && agent.openingMessage) {
+          // No backend conversation yet. Show the opening locally so the
+          // student sees something. The real opening will be persisted
+          // server-side once they send their first message.
+          if (liveAgentRef.current === agent.personaId) {
+            setMessages([
+              {
+                messageId: 'preview-opening',
+                role: 'ASSISTANT',
+                content:
+                  modeOverride === 'briefback' && agent.briefbackOpening
+                    ? agent.briefbackOpening
+                    : agent.openingMessage,
+                timestamp: new Date().toISOString(),
+              },
+            ]);
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown error';
+        setError(`Could not load conversation: ${message}`);
+      }
+    },
+    [scenarioId],
+  );
+
+  const sendMessage = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const text = inputText.trim();
+      if (!text || !selectedAgent || !scenarioId) return;
+
+      const inFlightAgent = selectedAgent;
+      const isStillLive = () => liveAgentRef.current === inFlightAgent.personaId;
+
+      setInputText('');
+      setError(null);
+
+      // Optimistic local append so the student sees their message immediately
+      const optimistic: Message = {
+        messageId: `optimistic-${Date.now()}`,
+        role: 'USER',
+        content: text,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev.filter((m) => m.messageId !== 'preview-opening' || prev.length > 1), optimistic]);
+      setIsTyping(true);
+
+      try {
+        await generatePersonaReply({
+          scenarioId,
+          personaId: inFlightAgent.personaId,
+          userMessage: text,
+        });
+
+        // Find the conversationId if we don't have it yet
+        let cid = conversationId;
+        if (!cid) {
+          const mine = await listMyConversations(scenarioId);
+          const found = mine.find((c) => c.personaId === inFlightAgent.personaId);
+          cid = found?.conversationId ?? null;
+          if (cid && isStillLive()) setConversationId(cid);
+        }
+
+        if (cid) {
+          const loaded = await loadConversation(cid);
+          if (isStillLive()) {
+            setMessages(loaded.messages);
+            setMode(loaded.conversation.mode);
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown error';
+        setError(`Send failed: ${message}`);
+        // Keep the optimistic user message visible so they don't lose what
+        // they typed; they can retry by re-typing.
+      } finally {
+        setIsTyping(false);
+        if (onAfterSend) {
+          try {
+            onAfterSend();
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn('[chat] onAfterSend threw:', err);
+          }
+        }
+      }
+    },
+    [inputText, selectedAgent, scenarioId, conversationId, onAfterSend],
+  );
+
+  return {
+    selectedAgent,
+    selectAgent,
+    conversationId,
+    mode,
+    messages,
+    inputText,
+    setInputText,
+    isTyping,
+    error,
+    messagesEndRef,
+    sendMessage,
+  };
+}
+```
+
+### `src/hooks/useStore.ts`
+
+```typescript
+import { useCallback, useEffect, useState } from 'react';
+import {
+  deleteConversation as fnDeleteConversation,
+  exportConversations as fnExportConversations,
+  importSeedData as fnImportSeedData,
+  listAllConversations,
+  listMyConversations,
+  listPersonas,
+  listScenarios,
+  probeIsAdmin,
+  togglePersonaActive as fnTogglePersonaActive,
+  upsertPersona as fnUpsertPersona,
+  upsertScenario as fnUpsertScenario,
+} from '../foundry/client';
+import type {
+  AdminConversationSummary,
+  ConversationSummary,
+  ExportPayload,
+  Persona,
+  Scenario,
+} from '../foundry/types';
+
+/**
+ * Top-level store hook for the A731 simulator. Replaces the localStorage-backed
+ * store from the local pilot. All persistence lives in Foundry now; this hook
+ * caches results in React state and exposes the same shape the existing
+ * components expect:
+ *
+ *   { scenarios, agents, transcripts, isAdmin, ...mutations }
+ *
+ * `transcripts` is the list of the current user's ConversationSummary objects
+ * (used by Dashboard and ScenarioView for "conversations started" counts and
+ * stage-gating). The actual messages live inside Foundry and are fetched via
+ * `loadConversation` in `useChat`, not here.
+ */
+export function useStore() {
+  // Catalog
+  const [scenarios, setScenarios] = useState<Record<string, Scenario>>({});
+  const [agents, setAgents] = useState<Persona[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+
+  // Identity
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [identityChecked, setIdentityChecked] = useState(false);
+
+  // My conversations (lightweight summaries; messages fetched on demand)
+  const [transcripts, setTranscripts] = useState<ConversationSummary[]>([]);
+
+  // Initial load
+  const refreshCatalog = useCallback(async () => {
+    setLoadingCatalog(true);
+    try {
+      const [s, p] = await Promise.all([listScenarios(), listPersonas()]);
+      const map: Record<string, Scenario> = {};
+      for (const sc of s) map[sc.scenarioId] = sc;
+      setScenarios(map);
+      setAgents(p);
+    } finally {
+      setLoadingCatalog(false);
+    }
+  }, []);
+
+  const refreshMyConversations = useCallback(async () => {
+    const summaries = await listMyConversations();
+    setTranscripts(summaries);
+  }, []);
+
+  useEffect(() => {
+    refreshCatalog().catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[store] refreshCatalog failed:', err);
+    });
+    refreshMyConversations().catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[store] refreshMyConversations failed:', err);
+    });
+    probeIsAdmin()
+      .then(setIsAdmin)
+      .catch(() => setIsAdmin(false))
+      .finally(() => setIdentityChecked(true));
+  }, [refreshCatalog, refreshMyConversations]);
+
+  // ─── Scenario mutations ───────────────────────────────────────────────────
+  const upsertScenario = useCallback(
+    async (scenario: Scenario) => {
+      await fnUpsertScenario(scenario);
+      await refreshCatalog();
+    },
+    [refreshCatalog],
+  );
+
+  const deleteScenario = useCallback(async () => {
+    // No backend `deleteScenario` in v0.0.3 — admins must use Foundry's
+    // ontology UI to delete a scenario. Toggle the personas inactive instead.
+    throw new Error(
+      'Delete scenario not supported in v0.0.3. Mark its personas inactive or remove via the Foundry ontology UI.',
+    );
+  }, []);
+
+  // ─── Persona mutations ────────────────────────────────────────────────────
+  const upsertAgent = useCallback(
+    async (agent: Persona) => {
+      await fnUpsertPersona(agent);
+      await refreshCatalog();
+    },
+    [refreshCatalog],
+  );
+
+  const togglePersonaActive = useCallback(
+    async (personaId: string) => {
+      await fnTogglePersonaActive(personaId);
+      await refreshCatalog();
+    },
+    [refreshCatalog],
+  );
+
+  // Local pilot's `deleteAgent` mapped to soft-delete (toggle inactive).
+  // Hard delete requires the Foundry ontology UI in v0.0.3.
+  const deleteAgent = useCallback(
+    async (personaId: string) => {
+      await fnTogglePersonaActive(personaId);
+      await refreshCatalog();
+    },
+    [refreshCatalog],
+  );
+
+  // ─── Conversation lifecycle (student) ─────────────────────────────────────
+  const resetScenarioTranscripts = useCallback(
+    async (scenarioId: string) => {
+      // For the student-facing reset, list this scenario's conversations and
+      // delete each one. Requires admin permissions on the underlying
+      // `deleteConversation` function — see the README about gating this UI
+      // affordance behind `isAdmin`.
+      const mine = await listMyConversations(scenarioId);
+      for (const c of mine) {
+        try {
+          await fnDeleteConversation(c.conversationId);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(`[store] could not delete ${c.conversationId}:`, err);
+        }
+      }
+      await refreshMyConversations();
+    },
+    [refreshMyConversations],
+  );
+
+  // ─── Admin operations ─────────────────────────────────────────────────────
+  const adminListAllConversations = useCallback(
+    (filters?: { userId?: string; scenarioId?: string; personaId?: string }) =>
+      listAllConversations(filters) as Promise<AdminConversationSummary[]>,
+    [],
+  );
+
+  const adminExportConversations = useCallback(
+    (args: { userId?: string; scenarioId?: string; exportFormat?: 'json' | 'csv' }) =>
+      fnExportConversations(args) as Promise<ExportPayload>,
+    [],
+  );
+
+  const adminDeleteConversation = useCallback(
+    async (conversationId: string) => {
+      await fnDeleteConversation(conversationId);
+      await refreshMyConversations();
+    },
+    [refreshMyConversations],
+  );
+
+  const adminImportSeedData = useCallback(
+    async (args: { scenarios: string; personas: string }) => {
+      await fnImportSeedData(args);
+      await refreshCatalog();
+    },
+    [refreshCatalog],
+  );
+
+  return {
+    // Catalog
+    scenarios,
+    agents,
+    loadingCatalog,
+
+    // Identity
+    isAdmin,
+    identityChecked,
+
+    // Transcripts (lightweight)
+    transcripts,
+    refreshMyConversations,
+
+    // Catalog mutations
+    upsertScenario,
+    deleteScenario,
+    upsertAgent,
+    togglePersonaActive,
+    deleteAgent,
+
+    // Student conversation lifecycle
+    resetScenarioTranscripts,
+
+    // Admin
+    adminListAllConversations,
+    adminExportConversations,
+    adminDeleteConversation,
+    adminImportSeedData,
+
+    // For ad-hoc reload from anywhere
+    refreshCatalog,
+  };
+}
+
+export type Store = ReturnType<typeof useStore>;
+```
+
+### `src/index.css`
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+```
+
+### `src/main.jsx`
+
+```jsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
+### `package.json`
+
+```json
+{
+  "name": "a731-pilot-osdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1"
+  }
+}
+```
+
+### `tsconfig.json`
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["src"]
+}
+```
+
+### `vite.config.js`
+
+```javascript
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5174,
+    // When developing locally against a deployed Foundry environment, set
+    // VITE_FOUNDRY_PROXY to your stack hostname so REST function calls hit
+    // the right place. Inside the deployed Pilot/OSDK app these calls go
+    // straight to relative paths and SSO carries auth automatically.
+    proxy: process.env.VITE_FOUNDRY_PROXY
+      ? {
+          '/functions': {
+            target: process.env.VITE_FOUNDRY_PROXY,
+            changeOrigin: true,
+            secure: true,
+          },
+        }
+      : undefined,
+  },
+});
+```
+
+### `index.html`
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A731 Simulator</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+```
+
+### `tailwind.config.js`
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+};
+```
+
+### `postcss.config.js`
+
+```javascript
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+```
+

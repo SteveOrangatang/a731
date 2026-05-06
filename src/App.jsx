@@ -20,7 +20,9 @@ export default function App() {
     lessons,
     allTranscripts,
     submissions,
+    analyses,
     upsertSubmission,
+    upsertAnalysis,
     deleteTranscript,
     resetScenarioForUser,
   } = firestoreSync;
@@ -113,9 +115,11 @@ export default function App() {
         lessons={lessons}
         transcripts={allTranscripts}
         submissions={submissions}
+        analyses={analyses}
         onOpenLesson={openLesson}
         onSignOut={handleSignOut}
         onSubmitPaper={upsertSubmission}
+        onUpsertAnalysis={upsertAnalysis}
         onDeleteTranscript={deleteTranscript}
         onResetScenario={resetScenarioForUser}
         onEnterAdmin={() => setIsAdmin(true)}

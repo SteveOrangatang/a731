@@ -15,3 +15,25 @@ _slide_inspect/
 
 # Pre-restructure source backup (local-only safety net)
 src.pre-restructure.*/
+
+# Editor / OS lock files
+.~lock.*#
+*.tmp
+
+# Vite dev-server transient config snapshots
+vite.config.js.timestamp-*.mjs
+
+# Service account JSON should never land in the repo (env file is the home)
+*-firebase-adminsdk-*.json
+
+# Course content & instructor handouts — kept local, not pushed to the repo.
+# (Source-of-truth lives in src/data/initialAgents.js + the Lessons admin tab.)
+*.docx
+*.pdf
+A731_*.txt
+A731 Persona Directives.md
+A731 Source Code.md
+Vantage_Chatbot_Specs.md
+Student Handouts/
+docs/
+preview.html
