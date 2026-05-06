@@ -13,8 +13,10 @@ import {
   AlertTriangle,
   ArrowUp,
   ArrowDown,
+  RotateCcw,
 } from 'lucide-react';
 import { extractTextFromFile } from '../../utils/fileParsers';
+import ResetConfirmDialog from './ResetConfirmDialog';
 
 const EMPTY_RUBRIC_PATH = { summary: '', outcome: '' };
 const EMPTY_RUBRIC = {
@@ -41,11 +43,15 @@ export default function LessonsTab({
   onDeleteLesson,
   onReassignAgents,
   onSaveRubric,
+  onResetToSeed,
 }) {
   const [creating, setCreating] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [topError, setTopError] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetStatus, setResetStatus] = useState('');
 
   // Sorted list (stable) for display
   const sorted = useMemo(
@@ -82,14 +88,38 @@ export default function LessonsTab({
             scenarios and grading stay aligned with the lesson.
           </p>
         </div>
-        <button
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-md text-sm font-semibold hover:bg-indigo-700"
-        >
-          <Plus className="h-4 w-4" />
-          New Lesson
-        </button>
+        <div className="flex items-center gap-2">
+          {onResetToSeed && (
+            <button
+              onClick={() => setConfirmReset(true)}
+              disabled={resetting}
+              className="inline-flex items-center gap-2 bg-white border text-slate-700 px-3 py-2 rounded-md text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+              title="Overwrite all lessons with the seed values from the current build"
+            >
+              {resetting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+              {resetting ? 'Resetting…' : 'Reset to seed'}
+            </button>
+          )}
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-md text-sm font-semibold hover:bg-indigo-700"
+          >
+            <Plus className="h-4 w-4" />
+            New Lesson
+          </button>
+        </div>
       </div>
+
+      {resetStatus && (
+        <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 flex items-center gap-2">
+          <Check className="h-3.5 w-3.5" />
+          {resetStatus}
+        </div>
+      )}
 
       {topError && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded flex items-start gap-2">
@@ -151,6 +181,53 @@ export default function LessonsTab({
           </div>
         )}
       </div>
+
+      {confirmReset && (
+        <ResetConfirmDialog
+          title="Reset lessons to seed?"
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={async () => {
+            setResetting(true);
+            setResetStatus('');
+            try {
+              const count = await onResetToSeed();
+              setResetStatus(
+                `Reset complete: ${count} lessons rewritten from seed.`,
+              );
+              setConfirmReset(false);
+              setTimeout(() => setResetStatus(''), 6000);
+            } catch (err) {
+              setResetStatus(
+                `Reset failed: ${err?.message || 'unknown error'}`,
+              );
+            } finally {
+              setResetting(false);
+            }
+          }}
+          working={resetting}
+          confirmLabel="Reset lessons"
+          ack="I understand this will overwrite every lesson with the seed values from the current build."
+          body={
+            <>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                This action will <strong>overwrite every lesson record</strong>{' '}
+                with the canonical seed values from the current build (titles,
+                descriptions, objectives, student instructions, AI context,
+                and outcome rubrics).
+              </p>
+              <ul className="list-disc pl-5 text-xs text-rose-800 space-y-1 leading-relaxed">
+                <li>Any text edits you made through the admin UI will be replaced.</li>
+                <li>Custom lessons created via "New Lesson" will be removed if their IDs aren't in the seed.</li>
+                <li>Personas and transcripts are not touched.</li>
+              </ul>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Use this only when a lesson's text has drifted from the source
+                (e.g. missing "Your role" content). Cannot be undone.
+              </p>
+            </>
+          }
+        />
+      )}
 
       {pendingDelete && (
         <DeleteLessonModal

@@ -532,6 +532,18 @@ export function useFirestoreSync(user) {
       .catch(() => {});
   };
 
+  /**
+   * Overwrite the lessons doc in Firestore with the canonical DEFAULT_LESSONS
+   * values from this build. Use this to recover from any drift — most
+   * commonly, lessons whose `studentInstructions` field got blanked out by the
+   * earlier spread-clobber bug, which then prevents the dashboard's "Your role"
+   * panel from rendering. Returns the count of lessons written.
+   */
+  const resetLessonsToSeed = async () => {
+    await setDoc(ref('settings', 'lessons'), DEFAULT_LESSONS);
+    return Object.keys(DEFAULT_LESSONS).length;
+  };
+
   /** Move every agent currently on fromLessonId onto toLessonId. */
   const reassignAgentsLesson = async (fromLessonId, toLessonId) => {
     const batch = writeBatch(db);
@@ -968,6 +980,7 @@ export function useFirestoreSync(user) {
     upsertLesson,
     deleteLesson,
     reassignAgentsLesson,
+    resetLessonsToSeed,
 
     // Agents
     toggleAgent,

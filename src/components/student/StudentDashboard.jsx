@@ -19,6 +19,7 @@ import Header from '../Header';
 import PaperSubmission from './PaperSubmission';
 import TranscriptViewer from './TranscriptViewer';
 import ScenarioAnalysis from './ScenarioAnalysis';
+import ScenarioOverviewModal from './ScenarioOverviewModal';
 
 /** Sorted lesson ids (by lesson.order). */
 function lessonKeys(lessons) {
@@ -51,6 +52,7 @@ export default function StudentDashboard({
 }) {
   const [paperLesson, setPaperLesson] = useState(null);
   const [analysisLesson, setAnalysisLesson] = useState(null);
+  const [overviewLesson, setOverviewLesson] = useState(null);
   const [viewingTranscript, setViewingTranscript] = useState(null);
   const [confirmReset, setConfirmReset] = useState(null); // { lessonKey, lessonTitle, transcriptCount, hasSubmission }
   const [resetting, setResetting] = useState(false);
@@ -176,7 +178,6 @@ export default function StudentDashboard({
                     )}
                   </div>
 
-                  <ScenarioOverview lesson={lesson} />
 
                   <div className="space-y-2 text-xs">
                     <div className="flex items-center justify-between text-slate-600">
@@ -222,6 +223,17 @@ export default function StudentDashboard({
                   </div>
 
                   <div className="flex flex-col gap-2 pt-2">
+                    <button
+                      onClick={() => setOverviewLesson(key)}
+                      className="w-full flex items-center justify-between bg-white border border-emerald-300 text-emerald-800 px-3 py-2 rounded-md text-sm font-semibold hover:bg-emerald-50 transition-colors"
+                      title="View what the scenario is about and your role in it"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Info className="h-3.5 w-3.5" />
+                        Scenario overview
+                      </span>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => onOpenLesson(key)}
                       disabled={lessonAgents.length === 0}
@@ -382,6 +394,14 @@ export default function StudentDashboard({
         />
       )}
 
+      {overviewLesson && (
+        <ScenarioOverviewModal
+          lesson={lessons[overviewLesson] || { id: overviewLesson, title: overviewLesson }}
+          profile={profile}
+          onClose={() => setOverviewLesson(null)}
+        />
+      )}
+
       {analysisLesson && (
         <ScenarioAnalysis
           lesson={lessons[analysisLesson] || { id: analysisLesson, title: analysisLesson }}
@@ -479,47 +499,3 @@ export default function StudentDashboard({
   );
 }
 
-/**
- * Collapsible per-scenario overview shown inside each dashboard card.
- * Closed by default to keep the grid scannable; opens to show the full
- * description, learning objectives, and student instructions for the
- * scenario. Uses a native <details> so each card opens independently.
- */
-function ScenarioOverview({ lesson }) {
-  const hasContent =
-    lesson?.description || lesson?.objectives || lesson?.studentInstructions;
-  if (!hasContent) return null;
-
-  return (
-    <details className="group rounded-md border border-slate-200 bg-slate-50 open:bg-white">
-      <summary className="cursor-pointer list-none flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-md group-open:rounded-b-none">
-        <span className="flex items-center gap-1.5">
-          <Info className="h-3.5 w-3.5 text-emerald-600" />
-          Scenario overview
-        </span>
-        <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-open:rotate-180 transition-transform" />
-      </summary>
-      <div className="px-3 pb-3 pt-1 space-y-2 text-xs text-slate-700 leading-relaxed">
-        {lesson.description && (
-          <p>{lesson.description}</p>
-        )}
-        {lesson.objectives && (
-          <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">
-              Objectives
-            </h4>
-            <p className="whitespace-pre-wrap">{lesson.objectives}</p>
-          </div>
-        )}
-        {lesson.studentInstructions && (
-          <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">
-              Your role
-            </h4>
-            <p className="whitespace-pre-wrap">{lesson.studentInstructions}</p>
-          </div>
-        )}
-      </div>
-    </details>
-  );
-}

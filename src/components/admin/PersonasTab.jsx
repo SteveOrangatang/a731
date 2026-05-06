@@ -8,9 +8,9 @@ import {
   Trash2,
   BookOpen,
   RotateCcw,
-  AlertTriangle,
   Loader2,
 } from 'lucide-react';
+import ResetConfirmDialog from './ResetConfirmDialog';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -384,67 +384,51 @@ export default function PersonasTab({
       ))}
 
       {confirmReset && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-amber-50 rounded-full">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900">Reset personas to seed?</h3>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  This will <strong>delete every persona that isn't in the canonical seed</strong>{' '}
-                  (initialAgents.js) and <strong>overwrite the seed personas</strong> with the
-                  current code's values. Use this to clean up duplicates or fix
-                  personas with missing/wrong <code className="bg-slate-100 px-1 rounded">lessonId</code> fields.
-                </p>
-                <p className="text-xs text-amber-700 mt-2 leading-relaxed">
-                  Custom personas you created through the admin UI will be removed if their IDs
-                  aren't in the seed. Conversation transcripts attached to deleted personas will
-                  remain in Firestore but will no longer link to a live persona.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setConfirmReset(false)}
-                disabled={resetting}
-                className="px-4 py-2 border rounded text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={resetting}
-                onClick={async () => {
-                  setResetting(true);
-                  setResetStatus('');
-                  try {
-                    const result = await onResetToSeed();
-                    setResetStatus(
-                      `Reset complete: ${result.deleted} removed, ${result.seeded} seeded.`,
-                    );
-                    setConfirmReset(false);
-                    setTimeout(() => setResetStatus(''), 6000);
-                  } catch (err) {
-                    setResetStatus(
-                      `Reset failed: ${err?.message || 'unknown error'}`,
-                    );
-                  } finally {
-                    setResetting(false);
-                  }
-                }}
-                className="px-4 py-2 bg-rose-600 text-white rounded text-sm font-semibold hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-1.5"
-              >
-                {resetting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RotateCcw className="h-3.5 w-3.5" />
-                )}
-                {resetting ? 'Resetting…' : 'Reset personas'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ResetConfirmDialog
+          title="Reset personas to seed?"
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={async () => {
+            setResetting(true);
+            setResetStatus('');
+            try {
+              const result = await onResetToSeed();
+              setResetStatus(
+                `Reset complete: ${result.deleted} removed, ${result.seeded} seeded.`,
+              );
+              setConfirmReset(false);
+              setTimeout(() => setResetStatus(''), 6000);
+            } catch (err) {
+              setResetStatus(
+                `Reset failed: ${err?.message || 'unknown error'}`,
+              );
+            } finally {
+              setResetting(false);
+            }
+          }}
+          working={resetting}
+          confirmLabel="Reset personas"
+          ack="I understand this will delete custom personas and overwrite all persona records."
+          body={
+            <>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                This action will <strong>permanently delete</strong> every persona
+                whose ID is not in the canonical seed (`initialAgents.js`) and{' '}
+                <strong>overwrite</strong> the 29 seed personas with the values from
+                the current build.
+              </p>
+              <ul className="list-disc pl-5 text-xs text-rose-800 space-y-1 leading-relaxed">
+                <li>Custom personas created through the admin UI will be removed.</li>
+                <li>Edits made to seed personas (directives, opening messages, etc.) will be overwritten.</li>
+                <li>Conversation transcripts attached to deleted personas remain in Firestore but lose their link to a live persona.</li>
+              </ul>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Use this only to clean up duplicates or fix personas with missing
+                <code className="bg-slate-100 px-1 rounded mx-1">lessonId</code>
+                fields. Cannot be undone.
+              </p>
+            </>
+          }
+        />
       )}
     </div>
   );

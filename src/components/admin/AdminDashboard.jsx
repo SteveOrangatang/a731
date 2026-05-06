@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Loader2, Activity, X } from 'lucide-react';
+import { Loader2, Activity, X } from 'lucide-react';
 import Header from '../Header';
 import TranscriptsTab from './TranscriptsTab';
 import PersonasTab from './PersonasTab';
@@ -12,8 +12,6 @@ import { testModelRotation } from '../../utils/gemini';
 
 export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit }) {
   const [tab, setTab] = useState('submissions');
-  const [seeding, setSeeding] = useState(false);
-  const [seedStatus, setSeedStatus] = useState('');
   const [diagOpen, setDiagOpen] = useState(false);
   const [diagRunning, setDiagRunning] = useState(false);
   const [diagResults, setDiagResults] = useState(null);
@@ -35,6 +33,7 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
     upsertLesson,
     deleteLesson,
     reassignAgentsLesson,
+    resetLessonsToSeed,
     saveRubric,
     upsertSubmission,
     deleteSubmission,
@@ -44,7 +43,6 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
     removeUser,
     assignScenarioToUser,
     setScenarioDifficulty,
-    seedDemoData,
     getApiKeyConfig,
     setApiKeyConfig,
     clearApiKey,
@@ -69,30 +67,6 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
     }
   };
 
-  const handleSeed = async () => {
-    if (
-      !window.confirm(
-        'Load demo course content and a sample student chat + submission? This overwrites the three default lessons with richer text and creates a demo student.',
-      )
-    )
-      return;
-    setSeeding(true);
-    setSeedStatus('');
-    try {
-      const result = await seedDemoData();
-      setSeedStatus(
-        `Seeded ${result.lessons} lessons${
-          result.seededTranscript ? ' + demo transcript & submission' : ''
-        }.`,
-      );
-      setTimeout(() => setSeedStatus(''), 4000);
-    } catch (err) {
-      setSeedStatus('Seed failed: ' + (err.message || 'unknown error'));
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const tabs = [
     ['submissions', 'Submissions & Grading'],
     ['analyses', 'Scenario Analyses'],
@@ -112,11 +86,6 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
             <h2 className="text-2xl font-bold text-slate-900">
               Instructor Dashboard
             </h2>
-            {seedStatus && (
-              <p className="text-xs text-emerald-700 font-semibold mt-1">
-                {seedStatus}
-              </p>
-            )}
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <button
@@ -131,19 +100,6 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
                 <Activity className="h-3.5 w-3.5 text-indigo-500" />
               )}
               {diagRunning ? 'Testing…' : 'Test Gemini rotation'}
-            </button>
-            <button
-              onClick={handleSeed}
-              disabled={seeding}
-              className="inline-flex items-center gap-2 bg-white border px-3 py-2 rounded-md text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              title="Load rich demo content and a sample student conversation + paper"
-            >
-              {seeding ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              )}
-              {seeding ? 'Seeding…' : 'Seed Demo Data'}
             </button>
             <div className="flex bg-white rounded-md border p-1 shadow-sm flex-wrap">
               {tabs.map(([key, label]) => (
@@ -219,6 +175,7 @@ export default function AdminDashboard({ firestoreSync, onCreateAdmin, onExit })
               onDeleteLesson={deleteLesson}
               onReassignAgents={reassignAgentsLesson}
               onSaveRubric={saveRubric}
+              onResetToSeed={resetLessonsToSeed}
             />
           )}
           {tab === 'settings' && (
