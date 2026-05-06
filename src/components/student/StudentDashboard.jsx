@@ -171,11 +171,6 @@ export default function StudentDashboard({
                     <h3 className="font-bold text-slate-900 text-lg leading-tight">
                       {lesson.title}
                     </h3>
-                    {lesson.description && (
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-3">
-                        {lesson.description}
-                      </p>
-                    )}
                   </div>
 
 
