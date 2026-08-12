@@ -1,5 +1,0 @@
-Work Order,Description,Work Type,Priority,Status,Location,Asset,Reported Date,Target Finish
-12345678,AHU-3 tripping on high static pressure alarm,CM,2,APPR,BLDG-A/FLR-2/RM-214,AHU-0003,08/10/2026,08/17/2026
-12345679,Quarterly PM - Generator 1 load bank test,PM,3,APPR,BLDG-P/GEN-YARD,GEN-0001,08/11/2026,08/25/2026
-12345680,Water leak under break room sink,CM,2,INPRG,BLDG-B/FLR-1/RM-108,,08/11/2026,08/14/2026
-12345681,Replace exit sign lamp east stairwell,CM,4,WAPPR,BLDG-A/STAIR-E,,08/12/2026,09/12/2026
