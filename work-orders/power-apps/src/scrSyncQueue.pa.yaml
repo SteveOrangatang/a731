@@ -1,0 +1,93 @@
+Screens:
+  scrSyncQueue:
+    Properties:
+      Fill: =ColorValue("#F4F4F2")
+    Children:
+      - btnBack:
+          Control: Button
+          Properties:
+            Text: ="< Back"
+            X: =24
+            Y: =16
+            Width: =110
+            OnSelect: =Back()
+      - lblHeader:
+          Control: Label
+          Properties:
+            Text: ="GMMS Sync Queue"
+            X: =150
+            Y: =16
+            Size: =22
+            FontWeight: =FontWeight.Semibold
+            Width: =400
+      - lblStats:
+          Control: Label
+          Properties:
+            Text: |
+              =CountRows(galSync.AllItems) & " pending · oldest " &
+               If(IsEmpty(galSync.AllItems), "0",
+                  Text(DateDiff(First(galSync.AllItems).Modified, Now(), TimeUnit.Hours))) & "h"
+            X: =Parent.Width - 420
+            Y: =24
+            Width: =396
+            Align: =Align.Right
+            Color: =If(!IsEmpty(galSync.AllItems) && DateDiff(First(galSync.AllItems).Modified, Now(), TimeUnit.Hours) > 24, ColorValue("#C42B1C"), ColorValue("#5B5F66"))
+      - galSync:
+          Control: Gallery
+          Variant: BrowseLayout_Vertical_TwoTextOneImageVariant_ver5.0
+          Properties:
+            X: =24
+            Y: =72
+            Width: =Parent.Width - 48
+            Height: =Parent.Height - 92
+            TemplateSize: =150
+            Items: |
+              =SortByColumns(
+                  Filter('Work Orders', GMMSSync.Value = "Pending"),
+                  "Modified", SortOrder.Ascending)
+          Children:
+            - lblRow1:
+                Control: Label
+                Properties:
+                  Text: |
+                    =ThisItem.Title & "  ·  " & ThisItem.WOStatus.Value &
+                     "  ·  " & Concat(ThisItem.AssignedTech, DisplayName & "; ") &
+                     "  ·  pending " & DateDiff(ThisItem.Modified, Now(), TimeUnit.Hours) & "h"
+                  X: =12
+                  Y: =6
+                  Width: =Parent.TemplateWidth - 220
+                  FontWeight: =FontWeight.Semibold
+            - lblRow2:
+                Control: Label
+                Properties:
+                  Text: |
+                    ="Notes: " & Coalesce(ThisItem.CompletionNotes, "—") & Char(10) &
+                     "Hours: " & Coalesce(Text(ThisItem.LaborHours), "—") &
+                     "   Parts: " & Coalesce(ThisItem.PartsUsed, "—")
+                  X: =12
+                  Y: =40
+                  Width: =Parent.TemplateWidth - 220
+                  Height: =100
+                  Size: =10
+            - btnMarkSynced:
+                Control: Button
+                Properties:
+                  Text: ="Mark Synced"
+                  X: =Parent.TemplateWidth - 190
+                  Y: =50
+                  Width: =170
+                  Visible: =nfIsLead
+                  OnSelect: |
+                    =Patch('Work Orders', ThisItem, {
+                        GMMSSync: {Value: "Synced"},
+                        SyncedBy: {
+                            '@odata.type': "#Microsoft.Azure.Connectors.SharePoint.SPListExpandedUser",
+                            Claims: "i:0#.f|membership|" & nfMyEmail,
+                            DisplayName: User().FullName,
+                            Email: nfMyEmail
+                        },
+                        SyncedDate: Now(),
+                        WOStatus: If(ThisItem.WOStatus.Value = "Completed",
+                                     {Value: "Closed in GMMS"},
+                                     ThisItem.WOStatus)
+                    })

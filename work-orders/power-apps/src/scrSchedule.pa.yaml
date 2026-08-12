@@ -1,0 +1,168 @@
+Screens:
+  scrSchedule:
+    Properties:
+      Fill: =ColorValue("#F4F4F2")
+    Children:
+      - btnBack:
+          Control: Button
+          Properties:
+            Text: ="< Back"
+            X: =24
+            Y: =16
+            Width: =110
+            OnSelect: =Back()
+      - lblHeader:
+          Control: Label
+          Properties:
+            Text: ="Schedule Board"
+            X: =150
+            Y: =16
+            Size: =22
+            FontWeight: =FontWeight.Semibold
+            Width: =400
+      # ---- Left: unassigned queue ----
+      - lblUnassigned:
+          Control: Label
+          Properties:
+            Text: ="Unassigned (" & CountRows(galUnassigned.AllItems) & ")"
+            X: =24
+            Y: =72
+            Width: =500
+            FontWeight: =FontWeight.Semibold
+      - galUnassigned:
+          Control: Gallery
+          Variant: BrowseLayout_Vertical_TwoTextOneImageVariant_ver5.0
+          Properties:
+            X: =24
+            Y: =110
+            Width: =Parent.Width * 0.55 - 36
+            Height: =Parent.Height - 130
+            TemplateSize: =90
+            Items: |
+              =SortByColumns(
+                  Filter('Work Orders',
+                      IsEmpty(AssignedTech),
+                      WOStatus.Value in nfOpenStatuses),
+                  "Priority", SortOrder.Ascending,
+                  "DueDate", SortOrder.Ascending)
+          Children:
+            - lblRow1:
+                Control: Label
+                Properties:
+                  Text: =ThisItem.Title & "  ·  " & ThisItem.Priority.Value & "  ·  " & Coalesce(ThisItem.Shop.Value, "no shop")
+                  X: =12
+                  Y: =6
+                  Width: =Parent.TemplateWidth - 24
+                  FontWeight: =FontWeight.Semibold
+            - lblRow2:
+                Control: Label
+                Properties:
+                  Text: =ThisItem.WODescription & "  ·  due " & Text(ThisItem.DueDate, "mm/dd")
+                  X: =12
+                  Y: =40
+                  Width: =Parent.TemplateWidth - 24
+                  Size: =10
+      # ---- Right: assignment panel ----
+      - lblAssign:
+          Control: Label
+          Properties:
+            Text: |
+              =If(IsBlank(galUnassigned.Selected), "Select a work order",
+                  "Assign " & galUnassigned.Selected.Title)
+            X: =Parent.Width * 0.55 + 12
+            Y: =72
+            Width: =Parent.Width * 0.45 - 36
+            FontWeight: =FontWeight.Semibold
+      - tglAllShops:
+          Control: Toggle
+          Properties:
+            X: =Parent.Width * 0.55 + 12
+            Y: =110
+            Width: =60
+            # Off = same-shop techs only, On = everyone
+      - lblAllShops:
+          Control: Label
+          Properties:
+            Text: =If(tglAllShops.Value, "All techs", "Same shop only")
+            X: =Parent.Width * 0.55 + 84
+            Y: =110
+            Width: =240
+            Size: =10
+      - cmbTech:
+          Control: ComboBox
+          Properties:
+            X: =Parent.Width * 0.55 + 12
+            Y: =150
+            Width: =Parent.Width * 0.45 - 48
+            SelectMultiple: =true
+            Items: |
+              =Filter(nfTechs,
+                  tglAllShops.Value ||
+                  IsBlank(galUnassigned.Selected.Shop.Value) ||
+                  Shop.Value = galUnassigned.Selected.Shop.Value)
+            # DisplayFields: Title
+      - dteSched:
+          Control: DatePicker
+          Properties:
+            X: =Parent.Width * 0.55 + 12
+            Y: =220
+            Width: =260
+            DefaultDate: =Today()
+      - drpSlot:
+          Control: Dropdown
+          Properties:
+            Items: =["All Day", "AM", "PM"]
+            X: =Parent.Width * 0.55 + 290
+            Y: =220
+            Width: =160
+      - btnAssign:
+          Control: Button
+          Properties:
+            Text: ="Assign & Schedule"
+            X: =Parent.Width * 0.55 + 12
+            Y: =290
+            Width: =280
+            DisplayMode: |
+              =If(IsBlank(galUnassigned.Selected) || IsEmpty(cmbTech.SelectedItems),
+                  DisplayMode.Disabled, DisplayMode.Edit)
+            OnSelect: |
+              =Patch('Work Orders', galUnassigned.Selected, {
+                  AssignedTech: ForAll(cmbTech.SelectedItems, Member),
+                  ScheduledDate: dteSched.SelectedDate,
+                  ScheduledSlot: {Value: drpSlot.Selected.Value},
+                  WOStatus: {Value: "Scheduled"}
+              });
+              Notify("Assigned.", NotificationType.Success);
+              Reset(cmbTech)
+      # ---- Load strip: today's count per tech ----
+      - lblLoad:
+          Control: Label
+          Properties:
+            Text: ="Today's load"
+            X: =Parent.Width * 0.55 + 12
+            Y: =370
+            FontWeight: =FontWeight.Semibold
+            Width: =300
+      - galLoad:
+          Control: Gallery
+          Variant: BrowseLayout_Vertical_TwoTextOneImageVariant_ver5.0
+          Properties:
+            X: =Parent.Width * 0.55 + 12
+            Y: =404
+            Width: =Parent.Width * 0.45 - 48
+            Height: =Parent.Height - 424
+            TemplateSize: =44
+            Items: =nfTechs
+          Children:
+            - lblTechLoad:
+                Control: Label
+                Properties:
+                  Text: |
+                    =ThisItem.Title & " — " &
+                     CountRows(Filter('Work Orders',
+                         ScheduledDate = Today(),
+                         ThisItem.Member.Email in Concat(AssignedTech, Email & ";"))) &
+                     " scheduled"
+                  X: =8
+                  Y: =4
+                  Width: =Parent.TemplateWidth - 16

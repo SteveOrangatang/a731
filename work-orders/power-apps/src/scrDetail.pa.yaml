@@ -1,0 +1,194 @@
+Screens:
+  scrDetail:
+    Properties:
+      Fill: =ColorValue("#F4F4F2")
+      # Refresh the selected record whenever the screen becomes visible
+      OnVisible: |
+        =If(!IsBlank(varSelectedWO),
+            Set(varSelectedWO, LookUp('Work Orders', ID = varSelectedWO.ID)));
+        UpdateContext({ctxShowHold: false, ctxShowComplete: false})
+    Children:
+      - btnBack:
+          Control: Button
+          Properties:
+            Text: ="< Back"
+            X: =24
+            Y: =16
+            Width: =110
+            OnSelect: =Back()
+      - lblTitle:
+          Control: Label
+          Properties:
+            Text: =varSelectedWO.Title & "  ·  " & varSelectedWO.Priority.Value & "  ·  " & varSelectedWO.WOStatus.Value
+            X: =150
+            Y: =16
+            Width: =Parent.Width - 174
+            Size: =20
+            FontWeight: =FontWeight.Semibold
+      - lblBody:
+          Control: Label
+          Properties:
+            Text: |
+              =varSelectedWO.WODescription & Char(10) & Char(10) &
+               "Location: " & varSelectedWO.Location & Char(10) &
+               "Asset: " & Coalesce(varSelectedWO.AssetID, "—") & Char(10) &
+               "Shop: " & Coalesce(varSelectedWO.Shop.Value, "—") & Char(10) &
+               "Reported: " & Text(varSelectedWO.ReportedDate, "mm/dd/yyyy hh:mm") & Char(10) &
+               "Due: " & Text(varSelectedWO.DueDate, "mm/dd/yyyy") & Char(10) &
+               "Assigned: " & Concat(varSelectedWO.AssignedTech, DisplayName & "; ") & Char(10) &
+               If(IsBlank(varSelectedWO.HoldReason), "", Char(10) & "HOLD: " & varSelectedWO.HoldReason)
+            X: =24
+            Y: =72
+            Width: =Parent.Width - 48
+            Height: =300
+      # ---- Action bar ----
+      - btnStart:
+          Control: Button
+          Properties:
+            Text: ="Start Work"
+            X: =24
+            Y: =Parent.Height - 72
+            Width: =200
+            Visible: =varSelectedWO.WOStatus.Value in ["New", "Assigned", "Scheduled", "On Hold - Parts", "On Hold - Access", "On Hold - Other"]
+            OnSelect: |
+              =Patch('Work Orders', varSelectedWO, {
+                  WOStatus: {Value: "In Progress"},
+                  GMMSSync: {Value: "Pending"}
+              });
+              Set(varSelectedWO, LookUp('Work Orders', ID = varSelectedWO.ID))
+      - btnHold:
+          Control: Button
+          Properties:
+            Text: ="Place On Hold"
+            X: =240
+            Y: =Parent.Height - 72
+            Width: =200
+            Visible: =varSelectedWO.WOStatus.Value in ["In Progress", "Assigned", "Scheduled"]
+            OnSelect: =UpdateContext({ctxShowHold: true})
+      - btnComplete:
+          Control: Button
+          Properties:
+            Text: ="Complete"
+            X: =456
+            Y: =Parent.Height - 72
+            Width: =200
+            Fill: =ColorValue("#1B6E3C")
+            Visible: =varSelectedWO.WOStatus.Value in ["In Progress", "On Hold - Parts", "On Hold - Access", "On Hold - Other"]
+            OnSelect: =UpdateContext({ctxShowComplete: true})
+      # ---- Hold panel ----
+      - conHold:
+          Control: GroupContainer
+          Properties:
+            Visible: =ctxShowHold
+            X: =Parent.Width/2 - 250
+            Y: =120
+            Width: =500
+            Height: =320
+            Fill: =Color.White
+          Children:
+            - drpHoldType:
+                Control: Dropdown
+                Properties:
+                  Items: =["On Hold - Parts", "On Hold - Access", "On Hold - Other"]
+                  X: =20
+                  Y: =20
+                  Width: =460
+            - txtHoldReason:
+                Control: TextInput
+                Properties:
+                  Mode: =TextMode.MultiLine
+                  HintText: ="Why is this on hold? (parts ordered, POC, ticket #...)"
+                  X: =20
+                  Y: =80
+                  Width: =460
+                  Height: =140
+            - btnHoldSave:
+                Control: Button
+                Properties:
+                  Text: ="Save Hold"
+                  X: =20
+                  Y: =240
+                  Width: =220
+                  OnSelect: |
+                    =Patch('Work Orders', varSelectedWO, {
+                        WOStatus: {Value: drpHoldType.Selected.Value},
+                        HoldReason: txtHoldReason.Text,
+                        GMMSSync: {Value: "Pending"}
+                    });
+                    Set(varSelectedWO, LookUp('Work Orders', ID = varSelectedWO.ID));
+                    UpdateContext({ctxShowHold: false})
+            - btnHoldCancel:
+                Control: Button
+                Properties:
+                  Text: ="Cancel"
+                  X: =260
+                  Y: =240
+                  Width: =220
+                  OnSelect: =UpdateContext({ctxShowHold: false})
+      # ---- Complete panel ----
+      - conComplete:
+          Control: GroupContainer
+          Properties:
+            Visible: =ctxShowComplete
+            X: =Parent.Width/2 - 250
+            Y: =80
+            Width: =500
+            Height: =460
+            Fill: =Color.White
+          Children:
+            - txtNotes:
+                Control: TextInput
+                Properties:
+                  Mode: =TextMode.MultiLine
+                  HintText: ="Completion notes — exactly what the team lead should key into GMMS"
+                  X: =20
+                  Y: =20
+                  Width: =460
+                  Height: =160
+            - numHours:
+                Control: TextInput
+                Properties:
+                  Format: =TextFormat.Number
+                  HintText: ="Total labor hours (all techs)"
+                  X: =20
+                  Y: =200
+                  Width: =220
+            - txtParts:
+                Control: TextInput
+                Properties:
+                  Mode: =TextMode.MultiLine
+                  HintText: ="Parts used (optional)"
+                  X: =20
+                  Y: =260
+                  Width: =460
+                  Height: =100
+            - btnCompleteSave:
+                Control: Button
+                Properties:
+                  Text: ="Complete Work Order"
+                  X: =20
+                  Y: =380
+                  Width: =280
+                  Fill: =ColorValue("#1B6E3C")
+                  OnSelect: |
+                    =If(IsBlank(txtNotes.Text) || IsBlank(numHours.Text),
+                        Notify("Completion notes and labor hours are required — the team lead keys these into GMMS.", NotificationType.Error),
+                        Patch('Work Orders', varSelectedWO, {
+                            WOStatus: {Value: "Completed"},
+                            CompletedDate: Now(),
+                            CompletionNotes: txtNotes.Text,
+                            LaborHours: Value(numHours.Text),
+                            PartsUsed: txtParts.Text,
+                            GMMSSync: {Value: "Pending"}
+                        });
+                        Notify("Completed — queued for GMMS entry.", NotificationType.Success);
+                        UpdateContext({ctxShowComplete: false});
+                        Back())
+            - btnCompleteCancel:
+                Control: Button
+                Properties:
+                  Text: ="Cancel"
+                  X: =320
+                  Y: =380
+                  Width: =160
+                  OnSelect: =UpdateContext({ctxShowComplete: false})

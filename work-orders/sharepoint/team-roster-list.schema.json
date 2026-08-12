@@ -1,0 +1,10 @@
+{
+  "list": "Team Roster",
+  "columns": [
+    { "internalName": "Title", "displayName": "Name", "type": "Text", "required": true },
+    { "internalName": "Member", "displayName": "Member", "type": "User", "required": true },
+    { "internalName": "TeamRole", "displayName": "Role", "type": "Choice", "choices": ["Technician", "Team Lead", "Supervisor"] },
+    { "internalName": "Shop", "displayName": "Shop", "type": "Choice", "choices": ["HVAC", "Electrical", "Plumbing", "Carpentry", "Generator", "Grounds", "Other"] },
+    { "internalName": "Active", "displayName": "Active", "type": "Boolean", "default": true }
+  ]
+}

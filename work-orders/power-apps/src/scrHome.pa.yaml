@@ -1,0 +1,109 @@
+Screens:
+  scrHome:
+    Properties:
+      Fill: =ColorValue("#F4F4F2")
+    Children:
+      - lblHeader:
+          Control: Label
+          Properties:
+            Text: ="My Work — " & nfMyRole
+            X: =24
+            Y: =16
+            Width: =Parent.Width - 400
+            Height: =48
+            Size: =22
+            FontWeight: =FontWeight.Semibold
+      - tglShowAll:
+          Control: Toggle
+          Properties:
+            X: =Parent.Width - 360
+            Y: =20
+            Width: =160
+            Visible: =nfIsLead
+            # Off = Mine, On = All Open
+      - lblShowAll:
+          Control: Label
+          Properties:
+            Text: =If(tglShowAll.Value, "All Open", "Mine")
+            X: =Parent.Width - 190
+            Y: =20
+            Width: =100
+      - btnSchedule:
+          Control: Button
+          Properties:
+            Text: ="Schedule Board"
+            X: =24
+            Y: =Parent.Height - 72
+            Width: =220
+            Visible: =nfIsLead
+            OnSelect: =Navigate(scrSchedule)
+      - btnSyncQueue:
+          Control: Button
+          Properties:
+            Text: ="Sync Queue (" & nfPendingCount & ")"
+            X: =260
+            Y: =Parent.Height - 72
+            Width: =220
+            Visible: =nfIsLead
+            OnSelect: =Navigate(scrSyncQueue)
+      - galMyWOs:
+          Control: Gallery
+          Variant: BrowseLayout_Vertical_TwoTextOneImageVariant_ver5.0
+          Properties:
+            X: =24
+            Y: =80
+            Width: =Parent.Width - 48
+            Height: =Parent.Height - 170
+            TemplateSize: =110
+            Items: |
+              =SortByColumns(
+                  Filter('Work Orders',
+                      WOStatus.Value in nfOpenStatuses,
+                      tglShowAll.Value || nfMyEmail in Lower(Concat(AssignedTech, Email & ";"))
+                  ),
+                  "Priority", SortOrder.Ascending,
+                  "DueDate", SortOrder.Ascending)
+            OnSelect: =Set(varSelectedWO, ThisItem); Navigate(scrDetail)
+          Children:
+            - recPriority:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =8
+                  Height: =Parent.TemplateHeight
+                  Fill: |
+                    =Switch(ThisItem.Priority.Value,
+                        "1 - Emergency", ColorValue("#C42B1C"),
+                        "2 - Urgent", ColorValue("#B8860B"),
+                        ColorValue("#5B5F66"))
+            - lblWONum:
+                Control: Label
+                Properties:
+                  Text: =ThisItem.Title & "  ·  " & ThisItem.Priority.Value & "  ·  " & ThisItem.WOStatus.Value
+                  X: =20
+                  Y: =6
+                  Width: =Parent.TemplateWidth - 40
+                  FontWeight: =FontWeight.Semibold
+            - lblDesc:
+                Control: Label
+                Properties:
+                  Text: =ThisItem.WODescription
+                  X: =20
+                  Y: =38
+                  Width: =Parent.TemplateWidth - 40
+                  Height: =40
+                  Size: =11
+            - lblWhere:
+                Control: Label
+                Properties:
+                  Text: |
+                    =ThisItem.Location &
+                     If(IsBlank(ThisItem.ScheduledDate), "",
+                        "  ·  " & Text(ThisItem.ScheduledDate, "ddd mm/dd") & " " &
+                        Coalesce(ThisItem.ScheduledSlot.Value, ""))
+                  X: =20
+                  Y: =80
+                  Width: =Parent.TemplateWidth - 40
+                  Size: =10
+                  Color: =ColorValue("#5B5F66")
