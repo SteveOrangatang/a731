@@ -46,6 +46,23 @@ export async function downloadGradeReport({
   saveAs(blob, `A731_Grade_${safeName}_${safeLesson}.docx`);
 }
 
+/**
+ * Legacy transcripts are stored as one flat message list with synthetic
+ * divider messages between personas, written by SubmissionsTab as
+ * `--- Conversation 2: SSG Lopez ---`. Pull the persona name back out of
+ * such a line so the report can restore the per-persona headings.
+ *
+ * @param {string} text  A single message's text.
+ * @returns {string|null}  The persona name, or null if this isn't a divider.
+ */
+export function parseConversationDivider(text) {
+  const match = String(text || '').match(
+    /^\s*---\s*Conversation\s*\d+\s*:\s*(.+?)\s*---\s*$/,
+  );
+  const name = match ? match[1].trim() : '';
+  return name || null;
+}
+
 function headingPara(text, level = HeadingLevel.HEADING_1) {
   return new Paragraph({
     heading: level,
@@ -147,10 +164,10 @@ function buildGradeReport({ grade, studentMeta, conversations, messages, paperTe
     // dividers as section headings.
     (messages || []).forEach((m) => {
       const text = m.text || '';
-      const dividerMatch = text.match(/^\s*---\s*Conversation\s*\d+:\s*(.+?)\s*---\s*$/);
-      if (dividerMatch) {
+      const dividerAgent = parseConversationDivider(text);
+      if (dividerAgent) {
         children.push(headingPara(
-          `Conversation with ${dividerMatch[1]}`,
+          `Conversation with ${dividerAgent}`,
           HeadingLevel.HEADING_2,
         ));
         return;

@@ -73,6 +73,27 @@ npm run dev
 
 Open http://localhost:5173.
 
+## 4a. Running the tests
+
+```
+npm test          # single run
+npm run test:watch
+```
+
+Vitest covers the data-parsing layer — the paths where the app has to make
+sense of input it doesn't control:
+
+- `src/utils/fileParsers.js` — which parser an uploaded filename routes to,
+  and how PDF pages are stitched into transcript text.
+- `src/utils/modelOutput.js` — recovering a JSON grade/analysis object from a
+  Gemini response that wrapped it in code fences or commentary, and reading
+  the retry delay out of a 429 message.
+- `src/config/constants.js` — comma-separated env var lists and the model
+  rotation order.
+- `src/utils/gradeReport.js` — the legacy flat-transcript conversation
+  dividers.
+- `api/_geminiProxy.js` — request body reading and validation.
+
 ## 5. First run — admin setup
 
 1. On the site-access screen, enter your super-admin passcode

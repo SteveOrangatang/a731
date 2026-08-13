@@ -106,7 +106,7 @@ async function resolveApiKey() {
  * middleware path; Vercel parses JSON automatically and exposes it as
  * `req.body`.
  */
-async function readJsonBody(req) {
+export async function readJsonBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);

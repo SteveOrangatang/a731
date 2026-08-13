@@ -1,4 +1,5 @@
 import { modelRotation } from '../config/constants';
+import { parseModelJson, parseRetryAfterMs } from './modelOutput';
 
 /**
  * Client-side Gemini wrapper. The actual API key never lives in the browser;
@@ -17,13 +18,6 @@ const PROXY_URL = '/api/gemini';
 // track this only at the model level — when a 429 comes back for one model
 // we skip it for a while and try the next.
 const _rateLimitedUntil = new Map(); // model -> ms timestamp
-
-function parseRetryAfterMs(errMsg) {
-  if (!errMsg) return 30_000;
-  const m = errMsg.match(/retry in (\d+(?:\.\d+)?)\s*s/i);
-  if (m) return Math.ceil(parseFloat(m[1]) * 1000) + 500;
-  return 60_000;
-}
 
 async function postProxy(model, body) {
   const res = await fetch(PROXY_URL, {
@@ -342,13 +336,7 @@ ${paperText || '(no paper submitted)'}`;
     },
   });
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('Model returned unparseable output.');
-  }
+  return parseModelJson(text);
 }
 
 /**
@@ -461,11 +449,5 @@ ${transcriptBlock || '(no conversations)'}`;
     },
   });
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('Model returned unparseable output.');
-  }
+  return parseModelJson(text);
 }
